@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Echowake · Lobby</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="console.css">
+<style>
+  .scene-art { background-position: center 30%; transition: background-image .4s; }
+  .scene-shade { background: linear-gradient(90deg, rgba(12,11,9,.55) 0%, rgba(12,11,9,.35) 30%, rgba(12,11,9,.82) 55%, rgba(12,11,9,.92) 100%), linear-gradient(180deg, transparent 60%, rgba(12,11,9,.85) 100%); }
+  .layout { flex: 1; display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 32px; padding: 8px 32px 28px; }
+  .identity { align-self: end; display: flex; flex-direction: column; gap: 10px; }
+  .identity .panel { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .facbtn { display: grid; grid-template-columns: 44px 1fr; align-items: center; column-gap: 10px; row-gap: 2px; width: 100%; padding: 8px 12px 8px 8px; text-align: left; background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 3px; color: var(--paper); cursor: pointer; font: 600 13px var(--sans); }
+  .facbtn img { grid-row: span 2; width: 44px; height: 44px; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0,0,0,.6)); }
+  .facbtn small { font: 500 10px var(--mono); letter-spacing: .08em; color: var(--faint); text-transform: uppercase; }
+  .facbtn:hover:not(:disabled) { border-color: var(--teal); }
+  .facbtn.on { background: var(--teal); color: var(--ink); border-color: var(--teal); }
+  .facbtn.on small { color: rgba(12,11,9,.7); }
+  .facbtn:disabled:not(.on) { opacity: .4; cursor: not-allowed; }
+  .pool { display: flex; flex-direction: column; gap: 16px; max-width: 900px; justify-self: end; width: 100%; }
+  .poolhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  .seg button { padding: 7px 12px; background: rgba(0,0,0,.4); color: var(--paper); border: 0; border-left: 1px solid var(--line); cursor: pointer; font: 600 12px var(--sans); }
+  .seg button:first-child { border-left: 0; }
+  .seg button small { font: 500 10px var(--mono); color: var(--faint); margin-left: 6px; letter-spacing: .06em; }
+  .seg button.on { background: var(--paper); color: var(--ink); }
+  .seg button.on small { color: rgba(12,11,9,.6); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+  .card { position: relative; overflow: hidden; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; transition: border-color .2s, box-shadow .2s; }
+  .card:hover { border-color: rgba(255,255,255,.3); }
+  .card.sel { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal), 0 0 30px var(--teal-glow); }
+  .card .year-bg { position: absolute; right: -6px; top: 18px; font: 400 64px/1 var(--serif); color: rgba(242,237,227,.06); pointer-events: none; }
+  .card .head { display: flex; justify-content: space-between; gap: 8px; }
+  .card .tag { font: 600 10px var(--mono); letter-spacing: .12em; }
+  .card h3 { margin: 0; font: 400 28px/1 var(--serif); color: var(--paper-bright); }
+  .card .yr { font: 500 11px var(--mono); color: var(--teal); }
+  .card .blurb { margin: 0; font: 13px/1.45 var(--sans); color: var(--dim); min-height: 3.6em; }
+  .card .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+  .card .stats b { display: block; font: 500 20px/1 var(--serif); }
+  .card .stats span { font: 500 9px var(--mono); letter-spacing: .12em; color: var(--faint); }
+  .card .leader { display: flex; align-items: center; gap: 8px; font: 12px var(--sans); }
+  .card .leader .label { font-size: 9px; }
+  .card .leader b { font-weight: 600; }
+  .card .leader .pts { margin-left: auto; font: 600 13px var(--mono); }
+  .card .acts { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 4px; }
+  .card .acts button { background: none; border: 0; padding: 4px 0; cursor: pointer; font: 600 12px var(--mono); letter-spacing: .1em; color: var(--paper); }
+  .card .acts button.play { color: var(--teal); }
+  .card .acts button:disabled { color: var(--faint); cursor: not-allowed; }
+  .card .acts button:hover:not(:disabled) { color: var(--teal-bright); }
+  .mini { width: 100%; height: 46px; display: block; }
+  .mini line { stroke: var(--teal); stroke-width: 1.2; stroke-opacity: .55; }
+  .mini circle { fill: var(--ink); stroke: var(--teal); stroke-width: 1.2; }
+  .mini circle.end { fill: var(--teal); }
+  .hero { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px 24px; }
+  .howto { flex: none; display: flex; align-items: center; gap: 12px; padding: 16px 24px; background: var(--teal); color: var(--ink); border-radius: 3px; font: 600 15px var(--sans); letter-spacing: .06em; text-decoration: none; box-shadow: 0 0 28px var(--teal-glow); }
+  .howto:hover { background: var(--teal-bright); }
+  .howto .q { width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--teal); display: flex; align-items: center; justify-content: center; font: 600 14px var(--mono); }
+  .agentlink { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 14px; background: rgba(12,11,9,.6); border: 1px dashed rgba(255,255,255,.28); border-radius: 4px; text-decoration: none; color: var(--paper); backdrop-filter: blur(8px); }
+  .agentlink:hover { border-color: var(--teal); }
+  .agentlink b { font: 600 12px var(--sans); letter-spacing: .04em; }
+  .agentlink small { font: 10px var(--mono); letter-spacing: .06em; color: var(--faint); }
+  .agentlink .marks { display: flex; align-items: center; }
+  .agentlink i { width: 24px; height: 24px; margin-left: -6px; border-radius: 50%; background: var(--ink); border: 1px solid rgba(255,255,255,.3); display: flex; align-items: center; justify-content: center; font: normal 600 9px var(--mono); color: var(--paper); }
+  .devclock { display: inline-flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border: 1px dashed var(--amber); border-radius: 3px; font: 500 11px var(--mono); letter-spacing: .08em; color: var(--amber); background: rgba(0,0,0,.5); }
+  .devclock button { padding: 4px 8px; background: rgba(255,255,255,.06); color: var(--paper); border: 1px solid var(--line); border-radius: 2px; cursor: pointer; font: 600 10px var(--mono); letter-spacing: .08em; }
+  .devclock button:hover { border-color: var(--amber); }
+  .devclock.hide { display: none; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; padding: 8px 16px 20px; } .identity { order: 2; } }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="scene-art" id="art"></div>
+  <div class="scene-shade"></div>
+  <div class="scene-body">
+    <div class="topbar">
+      <div class="group"><img class="logo" src="assets/echowake-logo.png" alt="Echowake"><span class="label accent">Lobby</span><span class="label" id="periodLabel"></span><span class="label" id="resetLabel"></span></div>
+      <div class="group"><span class="devclock hide" id="devClock"></span><span class="chip" id="runnersChip"></span><a class="btn small" href="leaderboard.html" style="flex-direction:row;color:var(--teal);border-color:var(--teal-glow)">LEADERBOARDS →</a></div>
+    </div>
+
+    <div class="layout">
+      <div class="identity">
+        <a class="agentlink" href="howto.html#agents">
+          <span style="display:flex;flex-direction:column;gap:2px"><b>Connect an AI agent</b><small>LET A MODEL RUN IT</small></span>
+          <span class="marks"><i title="Claude" style="color:oklch(75% .12 45)">C</i><i title="OpenAI">O</i><i title="Gemini" style="color:oklch(78% .12 260)">G</i><i title="Grok" style="color:rgba(242,237,227,.7)">X</i><span class="accent" style="margin-left:10px;font:12px var(--mono)">→</span></span>
+        </a>
+        <span class="label" style="margin-top:6px">Runner identity</span>
+        <div class="panel">
+          <span class="label">Runner name</span>
+          <input class="field" id="name" maxlength="24" autocomplete="nickname" placeholder="Enter runner name">
+          <span class="label" style="margin-top:6px">Faction</span>
+          <div id="factions" style="display:flex;flex-direction:column;gap:6px"></div>
+          <div class="muted" id="factionNote" style="font:12px/1.4 var(--sans)"></div>
+          <div class="muted" id="handicapNote" style="font:12px/1.4 var(--sans)"></div>
+        </div>
+      </div>
+
+      <div class="pool">
+        <div class="hero">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <h1 class="title">Choose your <em>map.</em></h1>
+            <p class="prose" id="intro" style="max-width:520px"></p>
+          </div>
+          <a class="howto" href="howto.html"><span class="q">?</span>HOW TO PLAY</a>
+        </div>
+        <div class="poolhead">
+          <span class="label">Map pool · this period</span>
+          <div style="display:flex;align-items:center;gap:10px"><span class="label">Difficulty</span><div class="seg" id="tiers"></div></div>
+        </div>
+        <div class="cards" id="cards"></div>
+        <div class="muted" style="font:12px var(--sans)">Each seed is ranked on the day it opens. After the daily reset it closes and becomes practice: not scored, not handed on. <a href="play.html">Classic view</a></div>
+        <div class="err" id="err"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="echowake-api.js"></script>
+<script src="sim.js"></script>
+<script src="console.js"></script>
+<script>
+(() => {
+  const { Sim, esc, $, store, api, ART, facIcon, facEmblem } = Console;
+  const params = new URLSearchParams(location.search);
+  // Invite links open the briefing for that chain.
+  if (params.get('chain')) { location.replace(`briefing.html?chain=${encodeURIComponent(params.get('chain'))}`); return; }
+
+  const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+  const live = () => Object.entries(Sim.MAPS).filter(([, m]) => m.status === 'live');
+  let ix = null;
+  let tier = Number(store.get('trap-relay-tier')) || 1;
+  let mapId = store.get('trap-relay-map');
+  let faction = store.get('trap-relay-faction') || 'wardens';
+  $('name').value = store.get('trap-relay-name') || '';
+  const me = () => ($('name').value || '').trim().toLowerCase();
+
+  // The next daily reset (08:00 UTC) in the viewer's own time.
+  // The server's clock (it can run ahead in dev mode), else this browser's.
+  function nextReset() {
+    const d = ix && ix.now ? new Date(ix.now) : new Date();
+    const r = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 8));
+    if (r <= d) r.setUTCDate(r.getUTCDate() + 1);
+    return r.toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+
+  // A small drawing of the map's geometry (rooms and links only, the same on every seed).
+  function mini(m) {
+    const xs = Object.values(m.rooms).map((r) => r.x), ys = Object.values(m.rooms).map((r) => r.y);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const W = 220, H = 46, pad = 5;
+    const px = (x) => pad + ((x - x0) / Math.max(1, x1 - x0)) * (W - 2 * pad);
+    const py = (y) => pad + ((y - y0) / Math.max(1, y1 - y0)) * (H - 2 * pad);
+    const lines = m.edges.map(([a, b]) => `<line x1="${px(m.rooms[a].x)}" y1="${py(m.rooms[a].y)}" x2="${px(m.rooms[b].x)}" y2="${py(m.rooms[b].y)}"/>`).join('');
+    const dots = Object.entries(m.rooms).map(([id, r]) => `<circle class="${id === m.start || id === m.exit ? 'end' : ''}" cx="${px(r.x)}" cy="${py(r.y)}" r="${id === m.start || id === m.exit ? 3 : 2}"/>`).join('');
+    return `<svg class="mini" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${lines}${dots}</svg>`;
+  }
+
+  // This period's best ranked escape per map on this tier.
+  function leaderOn(map) {
+    if (!ix) return null;
+    const rows = ix.runs.filter((r) => r.period === ix.period && r.tier === tier && r.map === map && r.ranked && r.outcome === 'escaped');
+    return rows.sort((a, b) => b.score - a.score || a.saved - b.saved)[0] || null;
+  }
+  // The newest closed seed of this map and tier, for practice.
+  function practiceSeed(map) {
+    if (!ix) return null;
+    const ns = ix.closedSeeds.map((s) => ({ s, p: Sim.parseSeedId(s) })).filter(({ p }) => p.mapId === map && p.tier === tier && p.version === Sim.versionOf(map));
+    return ns.length ? ns.sort((a, b) => b.p.n - a.p.n)[0].s : null;
+  }
+
+  async function load() {
+    try { ix = await api(`api/index?runner=${encodeURIComponent(me())}`); } catch (e) { $('err').textContent = `${e.message}. Is the page served by serve.js?`; }
+    render();
+  }
+
+  function render() {
+    if (!mapId || !Sim.MAPS[mapId] || Sim.MAPS[mapId].status !== 'live') mapId = live()[0][0];
+    $('art').style.backgroundImage = `url(${ART(mapId, 'gate')})`;
+    $('periodLabel').textContent = ix ? `Period ${ix.period}` : '';
+    $('resetLabel').textContent = `Resets ${nextReset()}`;
+    const runners = ix ? new Set(ix.runs.filter((r) => r.period === ix.period).map((r) => r.runner)).size : 0;
+    $('runnersChip').textContent = `${runners} RUNNER${runners === 1 ? '' : 'S'} THIS PERIOD`;
+    $('intro').textContent = `${live().length} maps are open this period, each with a new seed at every daily reset. Enter under a name the boards will remember.`;
+
+    // Identity: name, faction (locked once you've saved a run this period), handicap.
+    const mine = (ix && ix.me) || { open: [], played: [], lock: null };
+    const lock = mine.lock;
+    if (lock) faction = lock.faction;
+    $('factions').innerHTML = Object.entries(Sim.FACTIONS).map(([k, f]) => {
+      const beats = Object.keys(Sim.FACTIONS).find((o) => Sim.beats(k, o));
+      return `<button class="facbtn ${k === faction ? 'on' : ''}" data-fac="${k}" ${lock ? 'disabled' : ''}><img src="${facEmblem(k)}" alt=""><span>${esc(f.label)}</span><small>${esc(f.motto.replace(/\.$/, ''))} · beats ${esc(Sim.FACTIONS[beats].label)}</small></button>`;
+    }).join('');
+    for (const b of $('factions').querySelectorAll('[data-fac]')) b.onclick = () => { faction = b.dataset.fac; store.set('trap-relay-faction', faction); render(); };
+    $('factionNote').textContent = lock ? `Locked for ${lock.period}. You can switch next period.` : 'Your faction locks when you finish your first run this period.';
+    const hc = ix && ix.handicaps[me()];
+    $('handicapNote').textContent = !me() ? '' : hc && hc.value !== null ? `Handicap ${hc.value} (0 is perfect play).` : `Handicap after ${ix ? ix.handicapMin : 3} ranked runs (you have ${hc ? hc.runs : 0}).`;
+
+    $('tiers').innerHTML = Object.entries(Sim.TIERS).map(([k, t]) => `<button class="${Number(k) === tier ? 'on' : ''}" data-tier="${k}">${esc(t.label)}<small>${k}</small></button>`).join('');
+    for (const b of $('tiers').querySelectorAll('[data-tier]')) b.onclick = () => { tier = Number(b.dataset.tier); store.set('trap-relay-tier', tier); render(); };
+
+    $('cards').innerHTML = live().map(([id, m], i) => {
+      const seedId = ix && ix.nextSeed[id] ? ix.nextSeed[id][tier].current : Sim.seedIdOf(id, tier, 1);
+      const eco = Sim.economy(id, tier);
+      const open = mine.open.find((o) => o.seed === seedId);
+      const played = mine.played.includes(seedId);
+      const lead = leaderOn(id);
+      const prac = practiceSeed(id);
+      const tag = open ? ['OPEN RUN', 'var(--amber)'] : played ? ['PLAYED', 'var(--faint)'] : id === mapId ? ['SELECTED', 'var(--teal)'] : ['', ''];
+      // Once you've played today's seed, the button opens that run's score screen instead.
+      const done = played && !open && ix ? ix.runs.find((r) => r.runner === me() && r.seed === seedId) : null;
+      const play = open ? '▸ RESUME' : played ? 'VIEW SCORE' : `▸ PLAY SEED ${seedId.split('#')[1]}`;
+      return `<div class="panel card ${id === mapId ? 'sel' : ''}" data-map="${id}">
+        <div class="year-bg">${esc(m.year)}</div>
+        <div class="head"><span class="label">Map ${ROMAN[i] || i + 1}</span><span class="tag" style="color:${tag[1]}">${tag[0]}</span></div>
+        <div><h3>${esc(m.name.replace(/^The /, ''))}</h3><span class="yr">${esc(m.year)}</span></div>
+        ${mini(m)}
+        <p class="blurb">${esc(m.blurb)}</p>
+        <div class="stats"><div><b>${eco.rooms}</b><span>ROOMS</span></div><div><b>${eco.turnCap}</b><span>TURNS</span></div><div><b>${eco.supplies}</b><span>SUPPLIES</span></div></div>
+        <div class="leader"><span class="label">Leader</span>${lead ? `<b>${esc(lead.runner)}</b>${lead.faction ? facIcon(lead.faction, 16) : ''}<span class="pts">${lead.score}</span>` : '<span class="muted">nobody yet</span>'}</div>
+        <div class="acts">
+          ${done ? `<button class="play" data-score="${done.id}">▸ ${play}</button>` : `<button class="play" data-play="${id}" ${played && !open ? 'disabled' : ''}>${play}</button>`}
+          <button data-practice="${prac || ''}" ${prac ? '' : 'disabled title="No closed seed on this map and tier yet"'}>PRACTICE</button>
+        </div>
+      </div>`;
+    }).join('');
+    for (const c of $('cards').querySelectorAll('[data-map]')) c.onclick = () => { mapId = c.dataset.map; store.set('trap-relay-map', mapId); render(); };
+    for (const b of $('cards').querySelectorAll('[data-score]')) b.onclick = (e) => { e.stopPropagation(); location.href = `result.html?run=${encodeURIComponent(b.dataset.score)}`; };
+    for (const b of $('cards').querySelectorAll('[data-play]')) b.onclick = (e) => { e.stopPropagation(); go(`briefing.html?map=${b.dataset.play}&tier=${tier}`, b.dataset.play); };
+    for (const b of $('cards').querySelectorAll('[data-practice]')) b.onclick = (e) => { e.stopPropagation(); go(`briefing.html?seed=${encodeURIComponent(b.dataset.practice)}`, Sim.parseSeedId(b.dataset.practice).mapId); };
+  }
+
+  function go(url, map) {
+    if (!me()) { $('err').textContent = 'Enter a runner name first.'; $('name').focus(); return; }
+    store.set('trap-relay-map', map);
+    location.href = url;
+  }
+
+  // Dev only: the server answers /api/dev/clock when started with --dev. Next day jumps past the next daily reset.
+  async function devClock() {
+    let c;
+    try { c = await api('api/dev/clock'); } catch (e) { return; }
+    const box = $('devClock');
+    box.classList.remove('hide');
+    box.innerHTML = `DEV · ${esc(c.day)}${c.offsetMs ? ` (+${Math.round(c.offsetMs / 864e5 * 10) / 10} d)` : ''}`
+      + `<button id="devNext" title="Jump to just after the next daily reset: today's seeds close and the next ones open">NEXT DAY →</button>`
+      + (c.offsetMs ? '<button id="devReal" title="Drop the offset and return to the real clock">REAL TIME</button>' : '');
+    $('devNext').onclick = async () => { await api('api/dev/next-day', {}); location.reload(); };
+    if ($('devReal')) $('devReal').onclick = async () => { await api('api/dev/real-time', {}); location.reload(); };
+  }
+  devClock();
+
+  let timer = null;
+  $('name').oninput = () => { store.set('trap-relay-name', me()); $('err').textContent = ''; clearTimeout(timer); timer = setTimeout(load, 300); };
+  load();
+})();
+</script>
+</body>
+</html>

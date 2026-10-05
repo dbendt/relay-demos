@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relay Demos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #F4F1E9; --card: #FFFFFF; --ink: #1E2A24; --muted: #66746C; --line: #E3DDCF; --teal: #2BB3A3; --golf: #F2B52E; --moto: #E8604C; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #121614; --card: #1C2220; --ink: #EEF2EF; --muted: #9AA8A0; --line: #2C3431; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 600 16px/1.5 Nunito, system-ui, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 16px 64px; }
+  h1 { font: 800 44px/1.05 'Baloo 2', sans-serif; margin: 0; }
+  .lede { color: var(--muted); max-width: 640px; margin: 12px 0 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; margin-top: 36px; }
+  a.card { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; color: inherit; text-decoration: none; transition: transform .15s, box-shadow .15s; }
+  a.card:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,.12); }
+  .art { height: 150px; display: grid; place-items: center; }
+  .art img { max-width: 80%; max-height: 90px; }
+  .art svg { width: 120px; height: 120px; }
+  .body { padding: 18px 20px 22px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  h2 { font: 800 24px/1.1 'Baloo 2', sans-serif; margin: 0; }
+  .body p { margin: 0; color: var(--muted); font-size: 15px; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 10px; }
+  .tag { font: 800 11px Nunito; letter-spacing: .05em; text-transform: uppercase; border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; color: var(--muted); }
+  .play { font: 800 15px Nunito; margin-top: 6px; }
+  footer { margin-top: 40px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Relay Demos</h1>
+  <p class="lede">Three prototypes built around one idea: everyone plays the same seed today, and each player's run changes it for whoever plays next. You face what earlier players left you, then leave something for the next.</p>
+  <div class="grid">
+    <a class="card" href="echowake/">
+      <div class="art" style="background:#0c0b09"><img src="echowake-logo.png" alt="Echowake"></div>
+      <div class="body">
+        <h2>Echowake</h2>
+        <p>Run a daily dungeon seed in a few minutes. Grab loot, dodge the traps earlier runners left, and drop your own for the next runner.</p>
+        <div class="tags"><span class="tag">Desktop &amp; mobile</span><span class="tag">Runs in your browser</span></div>
+        <div class="play">Play →</div>
+      </div>
+    </a>
+    <a class="card" href="golf/">
+      <div class="art" style="background:#4F9A4B">
+        <svg viewBox="0 0 120 120" aria-hidden="true"><ellipse cx="60" cy="92" rx="44" ry="14" fill="#8ACB6A"/><line x1="58" y1="90" x2="58" y2="22" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M60 22 L92 32 L60 42 Z" fill="var(--golf)"/><circle cx="34" cy="88" r="6" fill="#fff"/></svg>
+      </div>
+      <div class="body">
+        <h2>Relay Golf</h2>
+        <p>A three-hole course a day, in 3D. Read the hole, play your round, then shape a hole with a bunker, a tree or a hidden ramp for the golfers behind you.</p>
+        <div class="tags"><span class="tag">Mobile first</span><span class="tag">Hot-seat chain</span></div>
+        <div class="play">Play →</div>
+      </div>
+    </a>
+    <a class="card" href="moto/">
+      <div class="art" style="background:#2A2F3A">
+        <svg viewBox="0 0 120 120" aria-hidden="true"><path d="M10 92 Q40 92 52 70 Q60 56 70 70 Q80 86 110 86" fill="none" stroke="#C9A26B" stroke-width="6" stroke-linecap="round"/><circle cx="44" cy="58" r="11" fill="none" stroke="#fff" stroke-width="4"/><circle cx="78" cy="58" r="11" fill="none" stroke="#fff" stroke-width="4"/><path d="M44 58 L58 44 L72 44 L78 58 M58 44 L62 36" fill="none" stroke="var(--moto)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="body">
+        <h2>Relay Moto</h2>
+        <p>Deterministic motocross against four riders. Manage speed, lean and heat over the day's track, then build boosts, oil or hurdles into it for the next rider.</p>
+        <div class="tags"><span class="tag">Best on desktop</span><span class="tag">Hot-seat chain</span></div>
+        <div class="play">Play →</div>
+      </div>
+    </a>
+  </div>
+  <footer>Prototypes. Everything is kept in your browser: your chains, runs and scores stay on this device, and anyone else playing on it shares them (a hot-seat chain).</footer>
+</main>
+</body>
+</html>

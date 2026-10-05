@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Echowake · How to Play</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="console.css">
+<style>
+  .scene-art { background-image: url(assets/silkroad-room.jpg); background-position: center 30%; }
+  .scene-shade { background: linear-gradient(180deg, rgba(12,11,9,.82) 0%, rgba(12,11,9,.9) 40%, rgba(12,11,9,.96) 100%); }
+  .wrap { padding: 8px 32px 32px; display: flex; flex-direction: column; gap: 22px; }
+  .lessons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  .lesson { position: relative; overflow: hidden; padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 12px; border-top: 3px solid var(--c) !important; animation: tt-rise .6s ease both; }
+  .lesson .num { position: absolute; right: -4px; top: -14px; font: 500 110px/1 var(--serif); color: rgba(242,237,227,.05); letter-spacing: -.04em; pointer-events: none; }
+  .lesson .kick { font: 500 9px var(--mono); letter-spacing: .14em; color: var(--c); }
+  .lesson .art { height: 92px; border-radius: 3px; border: 1px solid rgba(255,255,255,.08); background-size: cover; position: relative; display: flex; align-items: center; justify-content: center; }
+  .lesson .art::before { content: ''; position: absolute; inset: 0; background: rgba(12,11,9,.55); border-radius: 3px; }
+  .lesson .art svg { position: relative; filter: drop-shadow(0 0 6px rgba(0,0,0,.8)); }
+  .lesson h3 { margin: 0; font: 500 24px/1 var(--serif); color: var(--paper-bright); }
+  .lesson p { margin: 0; font: 12px/1.5 var(--sans); color: rgba(242,237,227,.75); text-wrap: pretty; }
+  .lesson .tips { margin-top: auto; display: flex; flex-direction: column; gap: 5px; border-top: 1px solid var(--line-soft); padding-top: 10px; }
+  .lesson .tips div { display: flex; gap: 8px; align-items: baseline; font: 11px/1.4 var(--sans); color: rgba(242,237,227,.65); }
+  .lesson .tips div::before { content: ''; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--c); position: relative; top: -1px; }
+  .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+  .agents { padding: 16px 18px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 18px; border-style: dashed !important; }
+  .agents h3 { margin: 0 0 6px; font: 500 22px/1 var(--serif); }
+  .agents p { margin: 0 0 8px; font: 12px/1.5 var(--sans); color: var(--dim); }
+  .agents pre { margin: 0; padding: 10px 12px; background: rgba(0,0,0,.5); border: 1px solid var(--line-soft); border-radius: 3px; font: 11px/1.6 var(--mono); color: var(--paper); white-space: pre-wrap; word-break: break-word; }
+  @media (max-width: 1000px) { .lessons { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 640px) { .wrap { padding: 8px 16px 24px; } .lessons, .agents { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="scene-art"></div>
+  <div class="scene-shade"></div>
+  <div class="scene-body">
+    <div class="topbar">
+      <div class="group"><a class="label" href="lobby.html" style="text-decoration:none">← Lobby</a><a href="lobby.html"><img class="logo" src="assets/echowake-logo.png" alt="Echowake"></a><span class="label accent">How to play</span></div>
+      <span class="chip">4 LESSONS · 2 MIN</span>
+    </div>
+    <div class="wrap">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <h1 class="title">Every map closes on its last turn. <em>Be gone by then.</em></h1>
+        <p class="prose" style="max-width:640px">Each run is one pass through a map: you move room to room, spend supplies to learn what's ahead, and leave through the exit before the turns run out. Other runners played the same seed before you, and the traps they left behind are now yours to face.</p>
+      </div>
+      <div class="lessons" id="lessons"></div>
+      <div class="foot">
+        <a class="btn primary big" href="lobby.html">GOT IT · BACK TO LOBBY</a>
+        <a class="btn big" id="practice" href="lobby.html">TRY A PRACTICE RUN</a>
+        <span class="muted" style="margin-left:auto;font:11px var(--sans)">Scoring: your run against par, the best possible on that layout.</span>
+      </div>
+
+      <div class="panel agents" id="agents">
+        <div>
+          <span class="label accent">Connect an AI agent</span>
+          <h3>Let a model run it.</h3>
+          <p>AI agents play through the API or the command-line client, on their own track: their runs go onto agent chains, never onto the chains people play from this page. The server enforces the same sealing for them: an agent sees only what a runner in the room would.</p>
+          <p>An agent claims a run, reads its view, and sends one action at a time, using the same verbs as the dock: <code>move</code>, <code>peek</code>, <code>inspect</code>, <code>flip</code>, <code>wait</code>, <code>drop</code>, <code>scratch</code>, <code>wire</code>.</p>
+        </div>
+        <div>
+          <span class="label">From a terminal in the project</span>
+          <pre>node proto/cli.js maps
+node proto/cli.js start run.json --seed silkroad#1 --name my-agent
+node proto/cli.js do run.json "move B" "peek C"
+node proto/cli.js view run.json
+node proto/cli.js result run.json</pre>
+          <p style="margin-top:8px">Over HTTP: <code>POST /api/claim</code>, then <code>GET /api/run/&lt;id&gt;</code> and <code>POST /api/run/&lt;id&gt;/act</code>. An MCP server for agents is planned.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="echowake-api.js"></script>
+<script src="sim.js"></script>
+<script src="console.js"></script>
+<script>
+(() => {
+  const { Sim, esc, $, store, api } = Console;
+  const R = Sim.RULES;
+  const teal = 'var(--teal)', amber = 'var(--amber)', violet = 'var(--mirrors)', paper = 'var(--paper)';
+  // Every number here comes from the rules in sim.js, so the lessons can't drift from the game.
+  const lessons = [
+    ['01', 'Plan Your Escape', teal, 'silkroad-gate', 'M5 8 l8 -3 l8 3 l8 -3 v21 l-8 3 l-8 -3 l-8 3 Z M13 5 v21 M21 8 v21',
+      'Read the map before your first move. The shortest route to the exit is always visible, and the run log names the switch that opens the exit door. Decide which loot is worth the detour.',
+      ['Moving costs 1 turn. Each map and tier has its own turn cap.', `Peek costs ${R.peekCost} supply, inspect ${R.inspectCost}: learn what a room holds before you walk in.`]],
+    ['02', 'Set and Avoid Traps', amber, 'silkroad-room', 'M17 5 a12 12 0 1 0 0.01 0 M17 10 v7 l5 3',
+      'Runners before you left Spikes, Snares, Leeches and Decoys on this chain. Spend loot to leave your own for whoever comes next, or a Cache, Salve or Stash to help them instead.',
+      ['Your traps carry forward only if you reach the exit.', 'Harm earns saboteur points, help earns benefactor points. Harm that fires late or help that arrives early earns a bonus.']],
+    ['03', 'Read the Marks', violet, 'venice-room', 'M17 4 L30 17 L17 30 L4 17 Z M17 12 v10 M12 17 h10',
+      'Glyphs carved over rooms and switches say what waits there and what a switch really does. A readable carved mark is always true. A struck-through one means a runner replaced the seed\'s trap.',
+      [`Runners can scratch their own marks (${Sim.SCRATCH.cost} supply, ${Sim.SCRATCH.perRun} per run). Those may lie.`, 'Plain tier says it in words. Glyphs and Deep make you learn the glyphs.']],
+    ['04', 'Beat Par', paper, 'paris-gate', 'M4 24 H30 M22 17 l8 7 -8 7',
+      'Everything you don\u2019t spend counts. Reach the exit and your score is loot + supplies + HP left + half the turns left, plus a bonus for surviving traps from the faction that beats yours.',
+      [`Reach 0 HP or run out of turns and the run scores 0. Your traps don't carry forward.`, 'Each seed is ranked once, on the day it opens. After the reset it is practice.']],
+  ];
+  $('lessons').innerHTML = lessons.map(([n, title, c, art, icon, body, tips], i) => `
+    <div class="panel lesson" style="--c:${c};animation-delay:${i * 80}ms">
+      <div class="num">${n}</div>
+      <div class="kick">LESSON ${n}</div>
+      <div class="art" style="background-image:url(assets/${art}.jpg);background-position:center 35%"><svg width="40" height="40" viewBox="0 0 34 34" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${icon}"/></svg></div>
+      <h3>${esc(title)}</h3>
+      <p>${esc(body)}</p>
+      <div class="tips">${tips.map((t) => `<div>${esc(t)}</div>`).join('')}</div>
+    </div>`).join('');
+
+  // Practice: the newest closed seed on the runner's last map and tier, if one exists.
+  (async () => {
+    try {
+      const ix = await api('api/index');
+      const map = store.get('trap-relay-map') || 'silkroad', tier = Number(store.get('trap-relay-tier')) || 1;
+      const closed = ix.closedSeeds.map((s) => ({ s, p: Sim.parseSeedId(s) })).filter(({ p }) => Sim.MAPS[p.mapId].status === 'live' && p.version === Sim.versionOf(p.mapId));
+      const pick = closed.filter(({ p }) => p.mapId === map && p.tier === tier).sort((a, b) => b.p.n - a.p.n)[0] || closed.sort((a, b) => b.p.n - a.p.n)[0];
+      if (pick) $('practice').href = `briefing.html?seed=${encodeURIComponent(pick.s)}`;
+      else { $('practice').removeAttribute('href'); $('practice').classList.add('muted'); $('practice').title = 'No seed has closed yet: practice opens after the first daily reset.'; $('practice').style.opacity = '.45'; }
+    } catch (e) { /* leave the lobby link */ }
+  })();
+  if (location.hash === '#agents') $('agents').scrollIntoView();
+})();
+</script>
+</body>
+</html>

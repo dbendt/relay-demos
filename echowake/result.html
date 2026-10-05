@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Echowake · Result</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="console.css">
+<style>
+  .scene-art { background-position: center 20%; }
+  .scene-shade { background: linear-gradient(180deg, rgba(12,11,9,.4) 0%, rgba(12,11,9,.72) 45%, rgba(12,11,9,.95) 100%); }
+  .grid { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 40px; padding: 48px; }
+  .main { display: flex; flex-direction: column; justify-content: flex-end; gap: 20px; animation: tt-rise .8s ease both; }
+  h1.big { margin: 0; font: 400 clamp(52px, 9vw, 92px)/.9 var(--serif); letter-spacing: -.02em; color: var(--paper-bright); }
+  .scorerow { display: flex; flex-wrap: wrap; align-items: center; gap: 28px; }
+  .score { font: 500 64px/1 var(--serif); color: var(--paper-bright); }
+  .par { font: 400 26px/1 var(--serif); color: var(--faint); }
+  .note { max-width: 300px; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start; font: 12px/1.5 var(--sans); color: var(--dim); }
+  .note .i { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--teal); color: var(--teal); display: flex; align-items: center; justify-content: center; font: 600 11px var(--mono); }
+  .breakdown { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; max-width: 680px; }
+  .breakdown .cell { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .breakdown .v { font: 500 22px/1 var(--serif); }
+  .bar { height: 3px; background: rgba(255,255,255,.1); border-radius: 2px; overflow: hidden; }
+  .bar div { height: 100%; background: var(--teal); width: 0; transition: width 1.2s ease; }
+  .credit { font: 13px/1.5 var(--sans); color: var(--dim); max-width: 680px; }
+  .credit b { color: var(--paper); font-weight: 500; }
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .share { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  .share code { display: flex; align-items: center; padding: 0 12px; font: 500 11px var(--mono); color: var(--dim); max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .share button { padding: 10px 14px; background: rgba(255,255,255,.08); color: var(--paper); border: 0; border-left: 1px solid var(--line); cursor: pointer; font: 500 12px var(--sans); min-width: 96px; }
+  .side { align-self: end; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; animation: tt-rise .8s .25s ease both; }
+  .side h3 { margin: 0; font: 500 15px var(--serif); }
+  .boardhead { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 6px; border-bottom: 1px solid var(--line-soft); }
+  .more { max-width: 900px; }
+  .more .log { max-height: 320px; }
+  .more .morehead { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .more details { margin-top: 10px; } .more details:first-of-type { margin-top: 0; }
+  .more summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  .more summary::-webkit-details-marker { display: none; }
+  .more summary::before { content: '▸'; font: 11px var(--mono); color: var(--teal); transition: transform .15s; }
+  .more details[open] > summary::before { transform: rotate(90deg); }
+  .more summary:hover .label { color: var(--paper); }
+  .logtoggle { flex-direction: row !important; align-items: center; gap: 8px !important; }
+  .logtoggle .chev { font: 11px var(--mono); transition: transform .15s; }
+  .logtoggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; padding: 28px 16px; gap: 24px; } }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="scene-art" id="art"></div>
+  <div class="scene-shade"></div>
+  <div class="scene-body">
+    <div class="grid">
+      <div class="main">
+        <div style="display:flex;align-items:center;gap:14px"><a href="lobby.html"><img class="logo" src="assets/echowake-logo.png" alt="Echowake"></a><span class="label accent" id="kicker"></span></div>
+        <h1 class="big" id="headline"></h1>
+        <p class="prose hide" id="collapseNote" style="max-width:560px"></p>
+        <div class="scorerow">
+          <div id="ring"></div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span class="label">Your score</span>
+            <div style="display:flex;align-items:baseline;gap:8px"><span class="score" id="score">0</span><span class="par" id="parText"></span></div>
+            <span class="muted" style="font:12px var(--sans)" id="scoreKind"></span>
+          </div>
+          <div class="panel note" id="note"><span class="i">i</span><div id="noteText"></div></div>
+        </div>
+        <div class="label" id="scoreLead" style="color:var(--dim);letter-spacing:.08em"></div>
+        <div class="breakdown" id="breakdown"></div>
+        <div class="credit" id="credit"></div>
+        <div class="credit hide" id="mine"></div>
+        <div class="actions">
+          <a class="btn primary big" href="lobby.html">RETURN TO LOBBY</a>
+          <button class="btn small logtoggle" id="logBtn" aria-expanded="false" aria-controls="more"><span id="logLabel">Show run log</span><span class="chev" aria-hidden="true">▾</span></button>
+          <div class="share hide" id="share"><code id="shareUrl"></code><button id="copy">Copy link</button></div>
+        </div>
+        <div class="more panel hide" id="more" style="padding:12px 14px"></div>
+        <div class="err" id="err"></div>
+      </div>
+      <div class="panel side" id="side"></div>
+    </div>
+  </div>
+</div>
+
+<script src="echowake-api.js"></script>
+<script src="sim.js"></script>
+<script src="console.js"></script>
+<script>
+(() => {
+  const { Sim, esc, $, api, loadSeed, glyphify, store, ART, countUp } = Console;
+  const runId = new URLSearchParams(location.search).get('run');
+
+  // The next daily reset (08:00 UTC), in the viewer's own time: when the par line and reveal unlock.
+  function nextReset(now) {
+    const d = now ? new Date(now) : new Date();
+    const r = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 8));
+    if (r <= d) r.setUTCDate(r.getUTCDate() + 1);
+    return r.toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+
+  async function load() {
+    if (!runId) { location.href = 'lobby.html'; return; }
+    let res;
+    try { res = await api(`api/run/${runId}/result`); } catch (e) {
+      // Not finished yet: back to the run.
+      if (/not over/.test(e.message)) { location.href = `run.html?run=${runId}`; return; }
+      $('err').textContent = e.message; return;
+    }
+    try { await loadSeed(res.seed); } catch (e) { $('err').textContent = e.message; return; }
+    const seed = Sim.getSeed(res.seed);
+    $('art').style.backgroundImage = `url(${ART(Sim.parseSeedId(res.seed).mapId, 'gate')})`;
+    const sc = res.score || { total: 0, breakdown: {} };
+    const b = sc.breakdown || {};
+    const par = res.par ? res.par.score : null;
+    $('kicker').textContent = `◉ ${res.status === 'practiced' ? 'Practice run' : res.ranked ? 'Ranked run' : 'Opening run, unranked'} · ${seed.name}`;
+    $('headline').innerHTML = { escaped: 'You <em>escaped.</em>', dead: 'You <em>fell.</em>', timeout: 'Out of <em>turns.</em>', abandoned: 'Run <em>abandoned.</em>' }[res.outcome] || esc(res.outcome);
+    // A paradox collapse (2j): the run escaped, but its traps would have left the next runner no way out.
+    if (res.collapsed) {
+      $('headline').innerHTML = 'Your timeline <em>collapsed.</em>';
+      $('collapseNote').textContent = 'You created a paradox where the next runner has no way out. Your score still stands, but your traps won’t be passed on.';
+      $('collapseNote').classList.remove('hide');
+    }
+    $('parText').textContent = par !== null ? `/ ${par}` : '';
+    $('scoreKind').textContent = par !== null ? 'your score / par, the best possible on this layout' : 'no escape was possible on this layout';
+    // P6: lead with what the score rewards.
+    $('scoreLead').textContent = res.outcome === 'escaped' ? 'Everything you didn\u2019t spend counts: loot, supplies, HP and half your turns left.' : 'A run that doesn\u2019t reach the exit scores 0.';
+
+    // Score ring and count-up.
+    const target = sc.total || 0;
+    const ringFor = (val) => {
+      const r = 52, C = 2 * Math.PI * r, pct = par ? Math.max(0, Math.min(1, val / par)) : 0;
+      return `<svg viewBox="0 0 120 120" width="120" height="120" aria-hidden="true"><circle cx="60" cy="60" r="${r}" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="6"/><circle cx="60" cy="60" r="${r}" fill="none" stroke="var(--teal)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${(C * pct).toFixed(1)} 400" transform="rotate(-90 60 60)" style="filter:drop-shadow(0 0 8px var(--teal))"/><text x="60" y="64" text-anchor="middle" style="font:500 12px var(--mono);fill:rgba(242,237,227,.7)">${par ? Math.round(pct * 100) : 0}%</text></svg>`;
+    };
+    countUp(target, 1800, (x) => { $('score').textContent = x % 1 ? x.toFixed(1) : String(x); $('ring').innerHTML = ringFor(x); });
+
+    // Sealed until the seed's chains close: say when.
+    $('noteText').innerHTML = res.sealed
+      ? `The best line through this layout, the full reveal and replays are sealed while other runners still face it. They unlock at the daily reset: <b style="color:var(--paper);font-weight:600">${esc(nextReset(res.now))}</b>.`
+      : `The seed has closed: the best line and the full reveal are open below.`;
+
+    // Breakdown, in the run's own score terms.
+    const cells = b.hpLeft !== undefined
+      ? [['Loot', b.loot, null], ['Supplies', b.supplies, Sim.RULES.supplies], ['HP left', b.hpLeft, Sim.RULES.hp], ['Turns left ÷ 2', b.turnsLeft, seed.turnCap / 2]]
+      : [['Loot', b.loot, null], ['Supplies', b.supplies, Sim.RULES.supplies], ['Damage', b.damage, null], ['Turns ÷ 2', b.turns, null]];
+    if (b.upset) cells.push(['Upset bonus', b.upset, null]);
+    $('breakdown').innerHTML = res.outcome === 'escaped' ? cells.map(([label, got, max]) => `<div class="panel cell"><span class="label">${esc(label)}</span><span class="v">${got ?? 0}${max ? `<span class="muted"> / ${max}</span>` : ''}</span><div class="bar"><div data-w="${max ? Math.round(((got || 0) / max) * 100) : 100}"></div></div></div>`).join('')
+      : '<div class="muted" style="font:13px var(--sans)">No score: only an escape scores. Traps you dropped were lost.</div>';
+    requestAnimationFrame(() => { for (const d of document.querySelectorAll('.bar div')) d.style.width = `${d.dataset.w}%`; });
+
+    // P3: the traps this runner left, and why each can or can't earn.
+    if (res.myTraps && res.myTraps.length) {
+      const kindOf = (text) => Object.entries(Sim.KINDS).find(([, d]) => text.split(': ')[1] && text.split(': ')[1].startsWith(d.label));
+      const lines = res.myTraps.map((t) => {
+        const k = kindOf(t.text), boon = k && k[1].boon, decoy = k && k[0] === 'decoy';
+        // Scouting credit (supplies spent peeking or inspecting it) never depends on the best line; harm and help do.
+        const why = decoy ? 'a Decoy harms nobody: it earns only when later runners spend supplies scouting it.'
+          : boon ? (t.forced ? `every route crosses ${esc(t.room)}, so the best line collects it too: it earns no benefactor points.` : 'it earns benefactor points for what it gives beyond what the best line collects.')
+          : t.forced ? `every route crosses ${esc(t.room)}, so the best line takes its harm too, which earns nothing. It still earns when later runners spend supplies scouting it.`
+          : 'it earns saboteur points when a later runner walks into it and the best line doesn\u2019t, or spends supplies scouting it.';
+        return `<b>${esc(t.text)}</b>: ${why}`;
+      });
+      const L = res.later;
+      let later = '';
+      if (!res.handedOn) later = res.collapsed ? 'They were not handed on: they would have left the next runner no way out.' : 'They were not handed on: traps only carry forward if you reach the exit.';
+      else if (!L || !L.runs) later = 'No later runner on your chain has met them yet. Check back after others play it.';
+      else {
+        const sab = Sim.saboteurPoints(L), ben = Sim.benefactorPoints(L);
+        later = `So far ${L.runs} later runner${L.runs === 1 ? '' : 's'} on your chain: `
+          + (L.dealt || L.drawn || L.unavoidable
+            ? `${L.dealt + L.unavoidable - L.fuseBonus ? `your traps cost them ${L.dealt + L.unavoidable - L.fuseBonus}${L.drawn ? ` and drew ${L.drawn} supplies of scouting` : ''}` : `they spent ${L.drawn} supplies scouting your traps`}, worth <b>+${sab}</b> saboteur points${L.unavoidable ? ` (${L.unavoidable} of it the best line takes too, which earns nothing)` : ''}. `
+            : 'none walked into your traps. ')
+          + (L.gave ? `Your boons gave ${L.gave}, worth <b>+${ben}</b> benefactor points.` : '')
+          + ' Weekly totals apply the per-pair cap.';
+      }
+      $('mine').innerHTML = `<span class="label" style="display:block;margin-bottom:4px">Your traps</span>${lines.join('<br>')}<br><span class="muted">${later}</span>`;
+      $('mine').classList.remove('hide');
+    }
+
+    // Designer credit this run gave out.
+    const credit = Object.entries(res.credited || {}).map(([o, i]) => {
+      const bits = [];
+      const hit = i.dealt - (i.fuseBonus || 0) + (i.unavoidable || 0);
+      if (hit + i.drawn) bits.push(`<b>${esc(o)}</b>'s traps cost you ${hit} and drew ${i.drawn} supplies${i.unavoidable ? ` (${i.unavoidable} more of it the best line takes too, which earns them nothing)` : ''}${i.fuseBonus ? `, plus a ${i.fuseBonus} late-fuse bonus` : ''}: +${Sim.saboteurPoints(i)} saboteur points.`);
+      if (i.given) bits.push(`<b>${esc(o)}</b>'s boons gave you ${i.gave}${i.aidBonus ? `, plus a ${i.aidBonus} early-aid bonus` : ''}: +${Sim.benefactorPoints(i)} benefactor points.`);
+      return bits.join(' ');
+    }).filter(Boolean);
+    $('credit').innerHTML = (credit.length ? credit.join('<br>') : '<span class="muted">No earlier runner\'s trap or boon touched you.</span>')
+      + (res.collapsed ? '<br><b>Paradox collapse:</b> your traps would have left no way out, so they were not handed on.' : '');
+
+    // Invite link: the next runner joins this chain.
+    if (res.chain && res.status === 'saved') {
+      const url = `${location.origin}${location.pathname.replace(/result\.html$/, 'briefing.html')}?chain=${res.chain}`;
+      $('share').classList.remove('hide');
+      $('shareUrl').textContent = url.replace(/^https?:\/\//, '');
+      $('copy').onclick = async () => { try { await navigator.clipboard.writeText(url); } catch (e) { /* clipboard blocked */ } $('copy').textContent = 'Copied ✓'; setTimeout(() => { $('copy').textContent = 'Copy link'; }, 1800); };
+    }
+
+    // Run log, and the reveal and par line once unsealed.
+    // The panel expands and collapses from the button or its own Collapse control, and remembers which it was.
+    // Inside, the log, reveal and par line are sections that open and close on their own.
+    const setLog = (open, scroll) => {
+      $('more').classList.toggle('hide', !open);
+      $('logBtn').setAttribute('aria-expanded', String(open));
+      $('logLabel').textContent = open ? 'Hide run log' : 'Show run log';
+      store.set('trap-relay-log-open', open ? '1' : '0');
+      if (open && scroll) $('more').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+    const section = (title, body, open) => `<details ${open ? 'open' : ''}><summary><span class="label">${title}</span></summary>${body}</details>`;
+    $('more').innerHTML = `<div class="morehead"><span class="label accent">Run log</span><button class="btn small" id="logClose" aria-controls="more">Collapse ▴</button></div>`
+      + section(res.sealed ? 'Your log' : 'Full log, with causes', `<div class="log">${(res.log || []).map((l) => `<div class="${/springs|catches|drains/.test(l) ? 'spring' : ''}">${glyphify(l)}</div>`).join('')}</div>`, true)
+      + (res.reveal ? section('Reveal', `<div class="log">${[...res.reveal.traps.map((x) => `trap  ${x}`), ...res.reveal.wiring.map((w) => `wire  ${w}`), ...(res.reveal.marks || []).map((m) => `mark  ${m}`)].map(glyphify).join('<br>') || 'No runner traps.'}</div>`, true) : '')
+      + (res.par && res.par.line ? section('Par line', `<div class="log">${esc(res.par.line.join(' → '))}</div>`, true) : '');
+    $('logBtn').onclick = () => setLog($('more').classList.contains('hide'), true);
+    $('logClose').onclick = () => { setLog(false); $('logBtn').focus(); };
+    setLog(store.get('trap-relay-log-open') === '1', false);
+
+    // This week's designer boards for the tier, with the runner highlighted.
+    try {
+      const ix = await api('api/index');
+      const t = ix.tiers[seed.tier];
+      const rows = (list, key, cls) => (list.length ? list.slice(0, 5).map((d, i) => `<div class="board-row ${d.name === res.runner ? `you ${cls}` : ''}"><span class="rank">${i + 1}</span><span>${esc(d.name)}</span><span class="pts">${d[key]}</span></div>`).join('') : '<div class="muted" style="font:13px var(--sans)">Nobody yet.</div>');
+      $('side').innerHTML = `<div style="display:flex;justify-content:space-between" class="label"><span>This period · ${esc(Sim.TIERS[seed.tier].label)}</span><span>${t.runCount} ranked runs</span></div>
+        <div><div class="boardhead"><h3 style="color:var(--amber)">Saboteurs</h3><span class="label">credit</span></div>${rows(t.saboteurs, 'saboteur', 'amber')}</div>
+        <div><div class="boardhead"><h3 style="color:var(--teal)">Benefactors</h3><span class="label">credit</span></div>${rows(t.benefactors, 'benefactor', '')}</div>
+        <div><div class="boardhead"><h3>Leader</h3><span class="label">best run</span></div>${t.leader ? `<div class="board-row ${t.leader.runner === res.runner ? 'you' : ''}"><span class="rank">1</span><span>${esc(t.leaders.map((l) => l.runner).join(', '))}</span><span class="pts">${t.leader.score}</span></div>` : '<div class="muted" style="font:13px var(--sans)">Nobody yet.</div>'}</div>`;
+    } catch (e) { $('side').classList.add('hide'); }
+  }
+  load();
+})();
+</script>
+</body>
+</html>

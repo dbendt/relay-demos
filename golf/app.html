@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Relay Golf</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Stage 2 one-hole prototype. Tokens from the Claude Design style guide (design/golf/). */
+  :root {
+    --marigold: #F2B52E; --ink: #1E2A24; --paper: #F7F4EC; --sheet: #FFFFFF;
+    --harm: #E8604C; --boon: #4C9BE8; --bluff: #A66BD9; --either: #6F7F8C; --good: #3FBF6F; --amber: #F2B52E;
+    --muted: #6B7A72; --line: #E7E2D6; --chip: rgba(255,255,255,.92);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #ECE8DF; font: 600 15px/1.4 Nunito, system-ui, sans-serif; color: var(--ink); overscroll-behavior: none; }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+  /* A phone-shaped frame on wide screens; the whole screen on a phone. */
+  #phone { position: relative; width: 100%; max-width: 430px; height: 100dvh; max-height: 932px; margin: 0 auto; overflow: hidden; background: #6FBF73; }
+  @media (min-width: 600px) { #phone { margin-top: 2vh; height: 96dvh; border-radius: 36px; box-shadow: 0 20px 60px rgba(0,0,0,.18); } }
+  #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .title { font: 800 34px/1.05 'Baloo 2', sans-serif; }
+  .h2 { font: 800 20px/1.15 'Baloo 2', sans-serif; }
+  .label { font: 800 12px/1.2 Nunito, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  /* Top chips */
+  #top { position: absolute; left: 12px; right: 12px; top: max(12px, env(safe-area-inset-top)); display: flex; gap: 8px; align-items: center; pointer-events: none; z-index: 5; }
+  .chip { pointer-events: auto; background: var(--chip); border-radius: 999px; padding: 6px 12px; font: 800 13px Nunito; box-shadow: 0 2px 8px rgba(0,0,0,.08); white-space: nowrap; }
+  .chip.dark { background: var(--ink); color: #fff; }
+  .spacer { flex: 1; }
+  /* Toasts: calls after a shot, the miss explanation */
+  #call { position: absolute; left: 50%; transform: translateX(-50%); top: 22%; text-align: center; z-index: 6; pointer-events: none; transition: opacity .25s; }
+  #call .tag { display: inline-block; background: var(--marigold); color: var(--ink); font: 800 12px Nunito; text-transform: uppercase; letter-spacing: .06em; padding: 4px 10px; border-radius: 999px; }
+  #call .big { margin-top: 8px; background: #fff; border-radius: 16px; padding: 10px 16px; font: 800 20px 'Baloo 2'; box-shadow: 0 6px 18px rgba(0,0,0,.15); }
+  #call .sub { margin-top: 6px; font: 700 13px Nunito; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  #explain { position: absolute; left: 50%; transform: translateX(-50%); z-index: 6; background: var(--ink); color: #fff; border-radius: 999px; padding: 7px 14px; font: 800 13px Nunito; white-space: nowrap; max-width: 92%; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+  /* Caddy */
+  #caddy { position: absolute; left: 12px; right: 12px; bottom: max(18px, env(safe-area-inset-bottom)); display: flex; gap: 10px; align-items: flex-end; z-index: 7; }
+  .mascot { flex: none; width: 54px; height: 54px; border-radius: 50%; background: #FBD86A; box-shadow: inset 0 -4px 0 rgba(0,0,0,.08), 0 3px 8px rgba(0,0,0,.15); position: relative; }
+  .mascot::before { content: ''; position: absolute; left: 6px; right: 6px; top: 9px; height: 11px; border-radius: 6px 6px 3px 3px; background: var(--ink); }
+  .mascot::after { content: ''; position: absolute; left: 17px; top: 28px; width: 20px; height: 6px; border-radius: 0 0 10px 10px; border: 3px solid var(--ink); border-top: 0; }
+  .bubble { flex: 1; background: #fff; border-radius: 18px 18px 18px 6px; padding: 12px 14px; font: 600 15px/1.4 Nunito; box-shadow: 0 6px 18px rgba(0,0,0,.15); }
+  /* Bottom sheet */
+  #sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--sheet); border-radius: 28px 28px 0 0; padding: 10px 16px max(16px, env(safe-area-inset-bottom)); box-shadow: 0 -6px 24px rgba(0,0,0,.12); z-index: 8; transition: transform .3s ease; }
+  #sheet .grab { width: 42px; height: 5px; border-radius: 3px; background: #DDD7CA; margin: 0 auto 10px; }
+  #sheet.hidden { transform: translateY(110%); }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .between { justify-content: space-between; }
+  .muted { color: var(--muted); font-size: 14px; }
+  .clubs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 10px 0; }
+  .club { position: relative; border: 1.5px solid var(--line); border-radius: 14px; padding: 8px 2px; text-align: center; font: 800 12.5px/1.15 Nunito; background: #fff; }
+  .club small { display: block; font: 700 11px Nunito; color: var(--muted); margin-top: 2px; }
+  .club.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .club.on small { color: #cfd6d1; }
+  .club:disabled { opacity: .35; }
+  .club .warn { position: absolute; top: -7px; right: -5px; width: 18px; height: 18px; border-radius: 50%; background: var(--harm); color: #fff; font: 800 12px/18px Nunito; }
+  .seg { display: flex; background: #EFEBE2; border-radius: 999px; padding: 4px; gap: 2px; }
+  .seg button { border-radius: 999px; padding: 8px 12px; font: 800 13px Nunito; color: var(--ink); }
+  .seg button.on { background: var(--ink); color: #fff; }
+  .seg button:disabled { opacity: .35; cursor: not-allowed; }
+  .seg.shape { flex: 1; justify-content: space-between; align-items: center; }
+  .seg.shape .mid { flex: 1; text-align: center; }
+  .note { font: 700 11.5px/1.3 Nunito; color: var(--muted); width: 92px; }
+  .primary { width: 100%; height: 56px; border-radius: 999px; background: var(--marigold); font: 800 20px 'Baloo 2'; margin-top: 10px; box-shadow: 0 4px 0 #d79a14; }
+  .primary:disabled { opacity: .45; box-shadow: none; }
+  .secondary { height: 56px; border-radius: 999px; background: #EFEBE2; font: 800 15px Nunito; padding: 0 18px; }
+  .pill { border: 2px solid var(--ink); border-radius: 999px; padding: 10px 14px; font: 800 15px Nunito; background: #fff; }
+  .pill:disabled { opacity: .35; }
+  .gauge { display: grid; grid-template-columns: repeat(14, 1fr); gap: 3px; margin-top: 6px; }
+  .gauge i { height: 10px; border-radius: 4px; background: #E9E4D8; }
+  .gauge i.on { background: var(--good); }
+  .gauge i.cap { background: var(--marigold); }
+  .round { width: 56px; height: 56px; flex: none; border-radius: 50%; background: #EFEBE2; font: 800 11px/1.1 Nunito; }
+  /* Meter */
+  .meter { position: relative; height: 26px; border-radius: 999px; overflow: hidden; margin-top: 8px;
+    background: linear-gradient(90deg, var(--harm) 0 20%, var(--amber) 20% 40%, var(--good) 40% 60%, var(--amber) 60% 80%, var(--harm) 80% 100%); }
+  .meter .tick { position: absolute; top: -2px; bottom: -2px; width: 5px; margin-left: -2px; background: var(--ink); border-radius: 3px; }
+  #tap { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); width: 150px; height: 150px; border-radius: 50%; background: var(--marigold); font: 800 34px 'Baloo 2'; box-shadow: 0 0 0 18px rgba(242,181,46,.3), 0 10px 30px rgba(0,0,0,.25); z-index: 9; }
+  #taphint { position: absolute; left: 0; right: 0; top: calc(40% + 100px); text-align: center; color: #fff; font: 800 15px Nunito; text-shadow: 0 1px 4px rgba(0,0,0,.4); z-index: 9; pointer-events: none; }
+  /* Hole done card */
+  #done { position: absolute; inset: 0; background: var(--paper); z-index: 20; padding: max(24px, env(safe-area-inset-top)) 20px 20px; overflow: auto; }
+  .card { background: #fff; border-radius: 22px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.05); margin-top: 14px; }
+  .shotline { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .shotline:last-child { border: 0; }
+  .num { font: 800 15px 'Baloo 2'; }
+  /* The design phase: a carousel of feature cards */
+  .fcards { display: flex; gap: 8px; overflow-x: auto; padding: 10px 2px 10px; margin: 0 -2px; scroll-snap-type: x mandatory; }
+  .fcard { flex: none; width: 104px; scroll-snap-align: start; text-align: left; border: 1.5px solid var(--line); border-radius: 16px; padding: 10px; background: #fff; display: grid; gap: 3px; }
+  .fcard.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .fcard b { font: 800 14px/1.15 Nunito; }
+  .fsw { width: 22px; height: 22px; border-radius: 7px; }
+  .ftag { font: 800 11px Nunito; text-transform: uppercase; letter-spacing: .05em; }
+  .fcard.on .ftag { filter: brightness(1.4); }
+  .fcost { font: 700 12px Nunito; color: var(--muted); }
+  .fcard.on .fcost { color: #cfd6d1; }
+  .tag-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: 0; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="phone">
+  <canvas id="scene"></canvas>
+  <div id="top"></div>
+  <div id="call" class="hidden"></div>
+  <div id="explain" class="hidden"></div>
+  <div id="caddy" class="hidden"><div class="mascot"></div><div class="bubble" id="caddytext"></div></div>
+  <button id="tap" class="hidden">Tap</button>
+  <div id="taphint" class="hidden">Tap when the marker<br>is in the green</div>
+  <div id="sheet" class="hidden"><div class="grab"></div><div id="sheetbody"></div></div>
+  <div id="done" class="hidden"></div>
+</div>
+<script src="golf-sim.js"></script>
+<script src="chain.js"></script>
+<script type="importmap">{ "imports": { "three": "./vendor/three/three.module.min.js", "three/addons/lines/": "./vendor/three/lines/" } }</script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

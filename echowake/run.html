@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Echowake · Run</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="console.css">
+<style>
+  .scene-art { background-position: center 35%; }
+  .scene-shade { background: linear-gradient(180deg, rgba(12,11,9,.75) 0%, rgba(12,11,9,.3) 22%, rgba(12,11,9,.35) 40%, rgba(12,11,9,.85) 60%, rgba(12,11,9,.97) 100%); }
+  .dust { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .right { display: flex; align-items: center; gap: 16px; }
+  .turnread { text-align: right; font: 500 10px var(--mono); letter-spacing: .14em; color: var(--faint); line-height: 1.6; }
+  .turnread b { color: var(--paper); font-size: 13px; font-weight: 500; }
+  .banner { margin: 0 32px 14px; padding: 8px 12px; font: 12px/1.45 var(--sans); color: var(--dim); }
+  .content { margin-top: auto; padding: 0 32px 26px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: end; }
+  .content > .wide { grid-column: 1 / -1; }
+  .roomtext { display: flex; flex-direction: column; gap: 8px; max-width: 680px; }
+  .routebar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 14px; border-left: 3px solid var(--teal); justify-self: start; }
+  .routebar .steps { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .routebar .step { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; font: 600 11px var(--mono); border: 1px solid rgba(255,255,255,.25); }
+  .routebar .step.now { background: var(--teal); color: var(--ink); border-color: var(--teal); }
+  .routebar .step.past { opacity: .45; border-color: transparent; }
+  .routebar .arrow { font: 11px var(--mono); color: var(--faint); }
+  .dockgrid { display: grid; grid-template-columns: 240px minmax(0, 1fr) 140px; gap: 12px; align-items: stretch; }
+  .dockgrid > .panel { padding: 10px; display: flex; flex-direction: column; gap: 6px; background: rgba(12,11,9,.8); }
+  .dockhead { padding: 2px 4px 4px; font-size: 10px; }
+  .verb { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: rgba(255,255,255,.04); color: var(--paper); border: 1px solid var(--line); border-radius: 3px; cursor: pointer; text-align: left; font: 600 13px var(--sans); }
+  .verb > span:first-child { display: flex; flex-direction: column; gap: 3px; }
+  .verb .cost { font: 500 10px var(--mono); letter-spacing: .06em; opacity: .65; }
+  .verb .chev { font: 14px var(--mono); opacity: .6; }
+  .verb:hover:not(:disabled) { border-color: var(--teal); }
+  .verb.on { background: var(--teal); color: var(--ink); border-color: var(--teal); }
+  .verb:disabled { opacity: .4; cursor: not-allowed; }
+  .opts { border-color: var(--teal-glow) !important; }
+  .opthead { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 14px; padding: 2px 4px 6px; font: 12px var(--sans); }
+  .opthead .label { font-size: 10px; }
+  .optgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+  .opt { display: flex; flex-direction: column; gap: 4px; padding: 11px 12px; background: rgba(255,255,255,.04); color: var(--paper); border: 1px solid var(--line); border-radius: 3px; cursor: pointer; text-align: left; font: 12px var(--sans); }
+  .verb.suggest { outline: 1.5px dashed var(--teal); outline-offset: 3px; box-shadow: 0 0 14px var(--teal-glow); }
+  .verb.suggest > span:first-child > span:first-child::after { content: 'NEXT'; margin-left: 8px; padding: 1px 5px; font: 600 9px var(--mono); letter-spacing: .12em; color: var(--ink); background: var(--teal); border-radius: 2px; vertical-align: 1px; }
+  .verb.suggest.on > span:first-child > span:first-child::after { color: var(--teal); background: var(--ink); }
+  .opt.suggest { border: 1.5px dashed var(--teal); box-shadow: 0 0 14px var(--teal-glow); }
+  .opt.suggest .t b::after { content: 'NEXT'; margin-left: 8px; padding: 1px 5px; font: 600 9px var(--mono); letter-spacing: .12em; color: var(--ink); background: var(--teal); border-radius: 2px; vertical-align: 1px; }
+  .opt .t { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .opt .t b { font: 600 13px var(--sans); }
+  .opt .tag { font: 500 10px var(--mono); color: var(--teal); white-space: nowrap; }
+  .opt .s { color: var(--dim); }
+  button.opt:hover:not(:disabled) { border-color: var(--teal); background: rgba(255,255,255,.08); }
+  button.opt:disabled { opacity: .4; cursor: not-allowed; }
+  .formrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .formrow > label { font: 12px var(--sans); color: var(--dim); display: flex; align-items: center; gap: 6px; }
+  .trapbox { border-color: var(--amber-glow) !important; }
+  .trapbtn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px 6px; background: none; color: var(--amber); border: 1px solid transparent; border-radius: 3px; cursor: pointer; font: 600 11px var(--mono); letter-spacing: .1em; }
+  .trapbtn .cost { font: 500 10px var(--mono); color: var(--faint); }
+  .trapbtn:hover:not(:disabled), .trapbtn.on { border-color: var(--amber); background: rgba(255,255,255,.04); }
+  .trapbtn:disabled { opacity: .4; cursor: not-allowed; }
+  .overlay { position: fixed; inset: 0; background: rgba(8,7,5,.92); z-index: 10; display: flex; flex-direction: column; padding: 20px 32px; overflow: auto; }
+  .overlay .mapbox { position: relative; max-width: 1100px; width: 100%; margin: 10px auto; }
+  .overlay .selinfo { max-width: 1100px; width: 100%; margin: 0 auto; padding: 12px 16px; font: 13px/1.5 var(--sans); color: var(--dim); }
+  /* Top right: the turn, and the idle countdown (the run is abandoned after this long without an action). */
+  .idle { text-align: right; font: 500 10px var(--mono); letter-spacing: .14em; color: var(--faint); line-height: 1.6; }
+  .idle b { color: var(--paper); font-weight: 500; }
+  .idlering { position: relative; width: 56px; height: 56px; flex: none; }
+  .idlering svg { display: block; transform: rotate(-90deg); }
+  .idlering .t { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font: 500 11px var(--mono); color: var(--paper); line-height: 1.1; }
+  .idlering .t small { font-size: 7px; letter-spacing: .14em; color: var(--faint); }
+  .idlering.low .t { color: var(--amber); }
+  /* The room row: description on the left, the small map on the right. */
+  .roomrow { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: end; }
+  .minimap { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: rgba(12,11,9,.82); }
+  .minimap .mh { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .minimap .mh button { padding: 3px 7px; min-width: 24px; background: rgba(255,255,255,.04); color: var(--dim); border: 1px solid var(--line); border-radius: 2px; cursor: pointer; font: 600 10px var(--mono); letter-spacing: .08em; }
+  .minimap .mh button:hover { border-color: var(--paper); color: var(--paper); }
+  .minimap .vp { position: relative; height: 128px; overflow: hidden; border-radius: 3px; background: rgba(0,0,0,.35); cursor: grab; touch-action: none; }
+  .minimap .vp.drag { cursor: grabbing; }
+  .minimap .vp > div { position: absolute; inset: 0; transform-origin: 0 0; }
+  .minimap .vp .map-svg { width: 100%; height: 100%; }
+  .minimap .vp .map-svg .room text.name { display: none; }
+  .minimap .foot { font: 500 9px var(--mono); letter-spacing: .1em; color: var(--faint); }
+  .minimap .maptoggles label { font-size: 11px; }
+  /* Event screens: a full-scene card per event, played in order after an action. */
+  .ev { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; background-color: var(--ink); background-size: cover; background-position: center 35%; animation: ev-in .35s ease both; }
+  .ev.hide { display: none; }
+  .ev .tint { position: absolute; inset: 0; }
+  .ev.neg .tint { background: radial-gradient(ellipse at 30% 50%, rgba(230,60,40,.32), transparent 60%), linear-gradient(180deg, rgba(70,12,8,.72), rgba(45,8,6,.86) 60%, rgba(12,11,9,.97)); }
+  .ev.neu .tint { background: radial-gradient(ellipse at 30% 50%, oklch(80% .12 200 / .26), transparent 60%), linear-gradient(180deg, rgba(6,32,38,.7), rgba(6,24,28,.86) 60%, rgba(12,11,9,.97)); }
+  .ev.pos .tint { background: radial-gradient(ellipse at 30% 50%, rgba(245,175,60,.32), transparent 60%), linear-gradient(180deg, rgba(56,36,8,.7), rgba(42,28,8,.86) 60%, rgba(12,11,9,.97)); }
+  .ev > * { position: relative; }
+  .ev .evbody { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(200px, 320px) minmax(0, 620px); gap: 40px; align-items: center; justify-content: center; padding: 0 40px 40px; }
+  .ev .fig { position: relative; aspect-ratio: 3 / 4; max-height: 62vh; background: radial-gradient(ellipse at 50% 62%, var(--glow), transparent 68%); display: flex; align-items: flex-end; justify-content: center; animation: ev-fig .5s cubic-bezier(.2,.8,.2,1.2) both; }
+  .ev .fig img { position: absolute; left: 50%; bottom: 6%; height: 100%; width: auto; max-width: 118%; transform: translateX(-50%); object-fit: contain; filter: drop-shadow(0 12px 24px rgba(0,0,0,.6)); }
+  .ev.out { animation: ev-out .45s ease both; pointer-events: none; }
+  @keyframes ev-out { from { opacity: 1 } to { opacity: 0 } }
+  .ev .fig .cap { position: absolute; left: 50%; transform: translateX(-50%); bottom: 0; font: 500 9px var(--mono); letter-spacing: .14em; color: var(--c); background: rgba(12,11,9,.7); padding: 2px 6px; border-radius: 2px; }
+  .ev .kick { display: flex; align-items: center; gap: 12px; font: 500 11px var(--mono); letter-spacing: .14em; color: var(--c); text-transform: uppercase; }
+  .ev .kick::before, .ev .kick::after { content: ''; width: 36px; height: 1px; background: var(--c); opacity: .6; }
+  .ev h1 { margin: 14px 0 10px; font: 400 clamp(44px, 7vw, 84px)/.95 var(--serif); letter-spacing: -.01em; color: var(--paper-bright); }
+  .ev .sub { margin: 0; font: 400 clamp(18px, 2vw, 22px)/1.4 var(--serif); color: rgba(242,237,227,.85); }
+  .ev .sub b { color: var(--c); font-weight: 500; }
+  .ev .notes { margin: 12px 0 0; display: flex; flex-direction: column; gap: 4px; font: 12px/1.5 var(--sans); color: var(--dim); max-width: 560px; }
+  .ev .go { margin-top: 26px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+  .ev .go .btn { padding: 15px 26px; font: 600 13px var(--sans); letter-spacing: .08em; }
+  .ev .count { display: flex; align-items: center; gap: 10px; font: 500 10px var(--mono); letter-spacing: .14em; color: var(--faint); }
+  .ev .count b { color: var(--paper); font-weight: 500; }
+  .ev .count svg circle.run { animation: ev-ring linear forwards; }
+  .ev .step { font: 500 10px var(--mono); letter-spacing: .14em; color: var(--faint); }
+  .ev .delta { margin-left: 6px; font-weight: 600; }
+  .chip.bad { border-color: rgba(220,80,60,.6); color: #f0b0a0; } .chip.good { border-color: var(--amber-glow); color: var(--amber); } .chip.flat { border-color: var(--teal-glow); color: var(--teal); }
+  @keyframes ev-in { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes ev-fig { from { opacity: 0; transform: translateY(18px) scale(.96) } to { opacity: 1; transform: none } }
+  @keyframes ev-ring { from { stroke-dashoffset: 0 } to { stroke-dashoffset: 44 } }
+  .ev.neg .fig { animation: ev-fig .5s cubic-bezier(.2,.8,.2,1.2) both, ev-shake .45s .1s ease both; }
+  @keyframes ev-shake { 0%,100% { translate: 0 } 20% { translate: -8px 0 } 40% { translate: 7px 0 } 60% { translate: -5px 0 } 80% { translate: 3px 0 } }
+  /* P7: one first-run hint at a time. */
+  .hintbar { margin: 0 32px 14px; padding: 9px 12px 9px 14px; display: flex; align-items: center; gap: 14px; border-left: 3px solid var(--teal) !important; border-radius: 0 4px 4px 0; font: 13px/1.45 var(--sans); color: var(--paper); }
+  .hintbar .k { font: 600 10px var(--mono); letter-spacing: .14em; color: var(--teal); flex: none; }
+  .hintbar button { margin-left: auto; flex: none; padding: 5px 10px; background: rgba(255,255,255,.05); color: var(--paper); border: 1px solid var(--line); border-radius: 3px; cursor: pointer; font: 600 11px var(--sans); }
+  .hintbar button:hover { border-color: var(--teal); }
+  .ev .notes .tip { color: var(--teal); }
+  /* P4: what a timed drop turns into. */
+  .kindchip { display: inline-block; padding: 1px 6px; border-radius: 2px; font: 600 10px var(--mono); letter-spacing: .06em; }
+  .kindchip.harm { background: rgba(220,80,60,.18); color: #f0b0a0; } .kindchip.flat { background: rgba(255,255,255,.1); color: var(--dim); } .kindchip.boon { background: rgba(240,170,60,.18); color: var(--amber); }
+  .droprule { font: 12px/1.45 var(--sans); color: var(--dim); }
+  .ended { margin: 0 32px 14px; padding: 12px 14px; border-color: var(--amber-glow) !important; font: 13px/1.5 var(--sans); }
+  details.logbox { padding: 10px 14px; }
+  details.logbox summary { cursor: pointer; }
+  @media (max-width: 860px) { .roomrow { grid-template-columns: 1fr; } .minimap { display: none; } .ev .evbody { grid-template-columns: 1fr; gap: 14px; padding: 0 16px 20px; align-content: center; } .ev .fig { width: 46%; margin: 0 auto; } .ev .topbar .chip:not(.accent) { display: none; } .idle { display: none; } .dockgrid { grid-template-columns: 1fr; } .content { grid-template-columns: 1fr; padding: 0 16px 20px; } .banner { margin: 0 16px; } .overlay { padding: 14px 16px; } }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="scene-art" id="art"></div>
+  <div class="scene-shade"></div>
+  <div class="dust" id="dust"></div>
+  <div class="scene-body">
+    <div class="topbar">
+      <div class="group"><a href="lobby.html" title="Lobby"><img class="logo" src="assets/echowake-logo.png" alt="Echowake"></a><span class="group" id="chips"></span></div>
+      <div class="right">
+        <div class="idle"><b id="turnText"></b><br>RUN ENDS IN</div>
+        <div class="idlering" id="idleRing" title="A run with no action for this long is abandoned: it counts as your attempt."></div>
+      </div>
+    </div>
+    <div class="panel banner" id="banner"></div>
+    <div class="panel hintbar hide" id="hint" role="status"></div>
+    <div class="panel ended hide" id="ended"></div>
+
+    <div class="content">
+      <div class="wide roomrow">
+        <div class="roomtext">
+          <div class="label" id="seedName"></div>
+          <h2 class="title" id="roomName"></h2>
+          <p class="prose" id="roomText"></p>
+        </div>
+        <div class="panel minimap" id="minimap">
+          <div class="mh"><span class="label accent" style="font-size:10px">Map</span><span style="display:flex;gap:4px"><button id="mmOut" title="Zoom out">−</button><button id="mmIn" title="Zoom in">+</button><button id="mmReset" title="Fit the whole map">RESET</button><button id="mapBtn" title="Full map (M)">⤢</button></span></div>
+          <div class="vp" id="mmVp"><div id="mmInner"></div></div>
+          <div class="foot" id="mmFoot"></div>
+          <div class="maptoggles" id="mmLayers"></div>
+        </div>
+      </div>
+      <div class="wide panel routebar hide" id="route"></div>
+      <div class="wide dockgrid">
+        <div class="panel verbs" id="verbs"></div>
+        <div class="panel opts" id="opts"></div>
+        <div class="panel trapbox" id="trapbox"></div>
+      </div>
+      <details class="wide panel logbox"><summary class="label">Run log</summary><div class="log" id="log"></div></details>
+      <div class="wide err" id="err"></div>
+    </div>
+  </div>
+</div>
+
+<div class="ev hide" id="ev" role="dialog" aria-modal="true" aria-live="assertive"></div>
+
+<div class="overlay hide" id="overlay">
+  <div class="topbar" style="padding:0"><span class="label accent">◉ Map · <span id="ovSeed"></span></span><button class="btn small" id="closeMap">Close map ✕</button></div>
+  <div class="mapbox"><div id="map"></div><div class="sweep" style="left:0"></div></div>
+  <div class="maptoggles" id="layers" style="max-width:1100px;width:100%;margin:0 auto 10px"></div>
+  <div class="panel selinfo" id="selInfo">Click a room to read it.</div>
+</div>
+
+<script src="echowake-api.js"></script>
+<script src="sim.js"></script>
+<script src="console.js"></script>
+<script>
+(() => {
+  const { Sim, esc, $, store, api, loadSeed, glyphify, fac, facIcon, ART, plan, mapSVG, layerToggles, markWords, dust } = Console;
+  // One Show switches / Show glyphs setting, shared by the small map and the full map.
+  const layers = () => { layerToggles($('layers'), document.body); layerToggles($('mmLayers'), document.body); for (const c of document.querySelectorAll('[data-layer]')) c.addEventListener('change', layers); };
+  layers();
+  const runId = new URLSearchParams(location.search).get('run');
+  $('dust').innerHTML = dust(14);
+  let claim = null, v = null, sel = null, busy = false, verb = 'move';
+  let idleDeadline = null, idleMs = 20 * 60e3, abandoned = false;
+  const mm = { z: 1, x: 0, y: 0, room: null };
+  const strategy = store.get(`trap-relay-strategy:${runId}`) || 'direct';
+  const seed = () => Sim.getSeed(v.seedId);
+  const R = Sim.RULES;
+
+  async function load() {
+    if (!runId) { location.href = 'lobby.html'; return; }
+    try { claim = await api(`api/run/${runId}`); } catch (e) { $('err').textContent = e.message; return; }
+    if (claim.result) { location.href = `result.html?run=${runId}`; return; }
+    v = claim.view;
+    try { await loadSeed(v.seedId); } catch (e) { $('err').textContent = e.message; return; }
+    $('art').style.backgroundImage = `url(${ART(Sim.parseSeedId(v.seedId).mapId, 'room')})`;
+    setIdle(claim);
+    render();
+  }
+
+  // The room the planned route enters next (null when the plan's next step is a flip here, or there is no plan).
+  // Only one thing is suggested next: the room to move to, or (when the plan's next step is a flip) the switch here.
+  const nextRoom = (p) => (p && p.steps.length && p.steps[0] !== '⚙' ? p.steps[0] : null);
+  const flipNext = (p) => !!(p && p.steps[0] === '⚙');
+
+  // ---------- P7: first-run hints ----------
+  // One line the first time each thing appears, remembered per runner and tier, so it fades out as players learn.
+  let shownHint = null;
+  const hintStoreKey = () => `trap-relay-hints:${v.runner}:${seed().tier}`;
+  const seenHints = () => { try { return new Set(JSON.parse(store.get(hintStoreKey()) || '[]')); } catch (e) { return new Set(); } };
+  const hintSeen = (k) => seenHints().has(k);
+  const seeHint = (k) => { const s = seenHints(); s.add(k); store.set(hintStoreKey(), JSON.stringify([...s])); if (shownHint === k) shownHint = null; };
+  const KIND_TIPS = {
+    spike: 'At 0 HP the run ends and scores 0.',
+    snare: 'A Snare costs turns, not health: keep an eye on the turn cap.',
+    leech: 'A Leech drains loot first, and supplies when you have no loot.',
+    salve: 'HP above 10 absorbs later damage, but doesn\u2019t add to your score.',
+  };
+  function pickHint() {
+    const m = seed(), tier = m.tier, here = v.rooms[v.room];
+    const rooms = Object.values(v.rooms);
+    const marked = rooms.some((r) => r.mark && r.mark.glyphs);
+    const wired = rooms.some((r) => r.switch && r.switch.mark && r.switch.mark.link);
+    const blankWired = rooms.some((r) => r.switch && r.switch.mark && r.switch.mark.link && !Array.from(r.switch.mark.glyphs || '').some((g) => Sim.TIERS[tier].glyphs.noun.includes(g)));
+    const faded = rooms.some((r) => (r.mark && r.mark.faded) || (r.switch && r.switch.mark && r.switch.mark.faded));
+    const scratched = rooms.some((r) => r.scratch && !r.scratch.mine);
+    const canDrop = Object.keys(v.prices.drop).some((k) => !k.includes('@') && v.prices.drop[k] <= v.loot);
+    const list = [
+      ['goal', true, `Reach the exit (X) within ${v.turnCap} turns. The log names the switch that opens its door. Everything you don\u2019t spend counts toward your score.`],
+      ['switch', here.switch && !here.switch.flipped, tier === 1 ? 'Flipping a switch costs a turn and works once. Its sign says what it does.' : 'Flipping a switch costs a turn and works once. The shape on it says what it pays (the door\u2019s shape is given); a stroke means it\u2019s wired to a trap.'],
+      ['mark', tier > 1 && marked, 'Carved marks are always true. A shape over a room names the seed\u2019s trap there; what each shape means changes every seed.'],
+      ['wired', tier > 1 && wired, 'A stroke on a switch says what flipping does to the trap at the other end of its wire: arm means that trap is dormant now, disarm means it\u2019s armed now.'],
+      ['blank', tier === 3 && blankWired, 'A switch with a stroke but no shape pays nothing, but its wire can still arm or disarm a trap. Sometimes it\u2019s the key.'],
+      ['faded', faded, 'A struck-through mark means a runner replaced or rewired what was carved there: something else waits now.'],
+      ['scratch', scratched, 'Scratched marks were left by earlier runners. They\u2019re signed but never checked: they may help, or lie.'],
+      ['peek', verb === 'peek', 'A peek costs 1 supply. It shows whether something is there and its faction sign, not whether it\u2019s armed.'],
+      ['inspect', verb === 'inspect', 'Inspect costs 3 supplies and shows exactly what waits there: the trap, whether it\u2019s armed, and any timer.'],
+      ['disarm', (v.rules >= 13 && Sim.neighbors(m, v.room).some((id) => v.rooms[id].intel && v.rooms[id].intel.result !== 'empty' && v.rooms[id].intel.how !== 'disarm')), 'You can disarm what your peek found next door: 2 supplies and a turn, for this run only. A peek can\u2019t tell a Spike from a Decoy or a gift, so it\u2019s a bet.'],
+      ['drop', canDrop, 'You can spend loot to leave a trap or a boon here for the next runner. It\u2019s only handed on if you reach the exit.'],
+    ];
+    const seen = seenHints();
+    const hit = list.find(([k, on]) => on && !seen.has(k));
+    return hit ? { key: hit[0], text: hit[2] } : null;
+  }
+  function renderHint() {
+    const h = pickHint();
+    shownHint = h ? h.key : null;
+    $('hint').classList.toggle('hide', !h);
+    if (!h) return;
+    $('hint').innerHTML = `<span class="k">TIP</span><span>${esc(h.text)}</span><button id="hintOk">Got it</button>`;
+    $('hintOk').onclick = () => { seeHint(h.key); renderHint(); };
+  }
+
+  // ---------- the idle countdown ----------
+  function setIdle(c) {
+    if (c.idleMs) idleMs = c.idleMs;
+    if (c.idleLeftMs !== null && c.idleLeftMs !== undefined) idleDeadline = Date.now() + c.idleLeftMs;
+    tickIdle();
+  }
+  function tickIdle() {
+    if (idleDeadline === null) return;
+    const left = Math.max(0, idleDeadline - Date.now());
+    const s = Math.ceil(left / 1000), r = 22, C = 2 * Math.PI * r, low = left < 2 * 60e3;
+    const col = low ? 'var(--amber)' : 'var(--teal)';
+    $('idleRing').classList.toggle('low', low);
+    $('idleRing').innerHTML = `<svg width="56" height="56" viewBox="0 0 56 56"><circle cx="28" cy="28" r="${r}" fill="rgba(0,0,0,.5)" stroke="rgba(255,255,255,.12)" stroke-width="3"/><circle cx="28" cy="28" r="${r}" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${(C * left / idleMs).toFixed(1)} ${C.toFixed(1)}" style="filter:drop-shadow(0 0 6px ${col})"/></svg><div class="t">${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}<small>MIN</small></div>`;
+    if (left === 0 && !abandoned) {
+      abandoned = true;
+      $('ended').classList.remove('hide');
+      $('ended').innerHTML = 'This run was abandoned after 20 minutes without an action. It counts as your attempt at this seed, scored as a timeout. <a href="lobby.html">Back to the lobby</a>';
+      for (const b of document.querySelectorAll('.dockgrid button')) b.disabled = true;
+    }
+  }
+  setInterval(tickIdle, 1000);
+
+  async function act(a) {
+    if (busy) return;
+    busy = true;
+    $('err').textContent = '';
+    const before = v;
+    if (shownHint) seeHint(shownHint);
+    try {
+      const out = await api(`api/run/${runId}/act`, { action: a });
+      v = out.view;
+      setIdle(out);
+      const evs = eventsOf(before, v);
+      if (!out.result) render();
+      await playEvents(evs, !!out.result);
+      busy = false;
+      if (out.result) { location.href = `result.html?run=${runId}`; return; }
+    } catch (e) { $('err').textContent = e.message; busy = false; }
+  }
+
+  // ---------- room events ----------
+  // The new feed entries an action produced, as screens: negative (a harmful trap springs), neutral (peek, inspect,
+  // flip) and positive (loot picked up, a cache paid out, a boon). Glyph lessons and wire notes join the screen before.
+  const IMG = { neg: 'assets/runner-trapped.webp', neu: 'assets/runner-neutral.webp', pos: 'assets/runner-positive.webp' };
+  const COLOR = { neg: 'oklch(68% .17 28)', neu: 'var(--teal)', pos: 'var(--amber)' };
+  const GLOW = { neg: 'rgba(220,70,50,.35)', neu: 'oklch(80% .12 200 / .25)', pos: 'rgba(240,170,60,.35)' };
+  const upper = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+  const signOf = (e) => (e.sign ? `${e.sign} sign` : e.source === 'seed' ? 'Seed trap' : e.source === 'stand-in' ? 'Stand-in trap' : 'No faction sign');
+  const signKey = (e) => Object.keys(Sim.FACTIONS).find((k) => Sim.FACTIONS[k].label === e.sign) || null;
+  function eventsOf(before, after) {
+    const fresh = (after.feed || []).slice((before.feed || []).length);
+    const out = [];
+    const ev = (tone, cap, kick, title, sub, delta) => out.push({ tone, cap, kick, title, sub, delta, notes: [] });
+    for (const e of fresh) {
+      if (e.kind === 'pickup') ev('pos', 'RUNNER · LOOT', `Loot · Room ${e.room}`, 'You found loot.', `You picked up <b>+${e.loot} loot</b>.`, { loot: `+${e.loot}` });
+      else if (e.kind === 'spring') {
+        const by = e.source === 'seed' ? "The seed's own" : e.source === 'stand-in' ? "A stand-in's" : "Another runner's";
+        const m = e.text.match(/(\d+) (loot|supplies)/) || [];
+        const harm = {
+          spike: [`${by} Spike did <b>−4 HP</b>.`, { hp: '−4' }],
+          snare: [`${by} Snare cost you <b>4 turns</b>.`, { turn: '+4' }],
+          leech: [`${by} Leech drained <b>${m[1]} ${m[2]}</b>.`, { [m[2] === 'loot' ? 'loot' : 'supplies']: `−${m[1]}` }],
+        }[e.trap];
+        const boon = {
+          cache: ['A Cache left for you: <b>+2 loot</b>.', { loot: '+2' }],
+          salve: ['A Salve left for you: <b>+3 HP</b>.', { hp: '+3' }],
+          stash: ['A Stash left for you: <b>+2 supplies</b>.', { supplies: '+2' }],
+        }[e.trap];
+        if (harm) ev('neg', 'RUNNER · HIT', `Trap sprung · ${signOf(e)}`, 'Trapped!', harm[0], harm[1]);
+        if ((harm || boon) && KIND_TIPS[e.trap] && !hintSeen(`kind-${e.trap}`)) { seeHint(`kind-${e.trap}`); out.tip = KIND_TIPS[e.trap]; }
+        else if (boon) ev('pos', 'RUNNER · BOON', `Boon · ${signOf(e)}`, 'Help from the past.', boon[0], boon[1]);
+        if ((harm || boon) && signKey(e)) out[out.length - 1].faction = signKey(e);
+        if (out.tip) { out[out.length - 1].tip = out.tip; delete out.tip; }
+      } else if (e.kind === 'peek' || e.kind === 'inspect') {
+        ev('neu', 'RUNNER · SCAN', `${upper(e.kind)} · Room ${e.room}`, `You ${e.kind === 'peek' ? 'peeked into' : 'inspected'} ${e.room}.`, `${esc(upper(e.result))}.`, { supplies: `−${e.cost}` });
+      } else if (e.kind === 'disarm') {
+        const k = Sim.KINDS[e.trap];
+        ev('neu', 'RUNNER · DISARM', `Disarm · Room ${e.room}`, `You disarmed ${e.room}.`, k.boon ? `It was a <b>${k.label}</b>: a gift, now gone.` : e.trap === 'decoy' ? 'It was a <b>Decoy</b>: nothing to fear after all.' : `It was a <b>${k.label}</b>. It won\u2019t touch you this run.`, { supplies: `\u2212${e.cost}`, turn: '+1' });
+      } else if (e.kind === 'inspectSwitch') {
+        ev('neu', 'RUNNER · SCAN', `Inspect · Switch ${e.switch}`, `You read ${e.switch}'s wiring.`, esc(upper(e.text.replace(/^Inspected \S+: /, ''))), { supplies: `−${e.cost}` });
+      } else if (e.kind === 'flip') {
+        const what = { open: 'The exit door opens.', cache: `A cache releases <b>${e.loot} loot</b>.`, none: 'Nothing you can see happens.' }[e.payoff];
+        ev('neu', 'RUNNER · SWITCH', `Switch ${e.switch} · Room ${e.room}`, 'You flipped a switch.', what, { turn: '+1' });
+        out[out.length - 1].payoff = e.payoff;
+        if (e.payoff === 'cache') ev('pos', 'RUNNER · CACHE', `Cache opened · Room ${e.room}`, 'You opened a cache.', `You received <b>+${e.loot} loot</b>.`, { loot: `+${e.loot}` });
+      } else if ((e.kind === 'glyph' || e.kind === 'rule') && out.length) {
+        // A wire note belongs to the flip, not to the cache screen that followed it.
+        const last = out[out.length - 1];
+        const target = e.kind === 'rule' && /wire/.test(e.text) && last.cap === 'RUNNER · CACHE' && out.length > 1 ? out[out.length - 2] : last;
+        target.notes.push(e.text);
+        if (e.kind === 'rule' && /wire/.test(e.text) && target.cap === 'RUNNER · SWITCH') target.wired = true;
+      }
+    }
+    // A flip that releases loot (the next screen shows it) or reaches a trap through its wire keeps the suspense.
+    const next = 'Let’s see what happens next…';
+    for (const x of out) if (x.cap === 'RUNNER · SWITCH' && (x.payoff === 'cache' || x.wired)) x.sub = x.payoff === 'open' ? `The exit door opens. ${next}` : next;
+    return out;
+  }
+  const EV_MS = 6000;
+  function playEvents(list, ending) {
+    return new Promise((done) => {
+      if (!list.length) { done(); return; }
+      let i = 0, timer = null, tick = null, closing = false;
+      const box = $('ev');
+      const key = (k) => { if ([' ', 'Enter', 'Escape'].includes(k.key)) { k.preventDefault(); next(); } };
+      // The last screen fades out to reveal the room (already drawn underneath).
+      const close = () => {
+        if (closing) return;
+        closing = true;
+        clearTimeout(timer); clearInterval(tick); document.removeEventListener('keydown', key);
+        box.classList.add('out');
+        setTimeout(() => { box.classList.add('hide'); box.classList.remove('out'); box.innerHTML = ''; done(); }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 450);
+      };
+      function next() { if (closing) return; clearTimeout(timer); clearInterval(tick); i += 1; if (i < list.length) show(); else close(); }
+      document.addEventListener('keydown', key);
+      function show() {
+        const e = list[i], last = i === list.length - 1;
+        const tone = e.tone === 'neg' ? 'bad' : e.tone === 'pos' ? 'good' : 'flat';
+        const chip = (k, label, val) => `<span class="chip ${e.delta[k] ? tone : ''}">${label} ${val}${e.delta[k] ? `<span class="delta">${e.delta[k]}</span>` : ''}</span>`;
+        box.className = `ev ${e.tone}`;
+        box.style.backgroundImage = $('art').style.backgroundImage;
+        box.style.setProperty('--c', COLOR[e.tone]);
+        box.style.setProperty('--glow', GLOW[e.tone]);
+        box.innerHTML = `<div class="tint"></div>
+          <div class="topbar"><div class="group"><img class="logo" src="assets/echowake-logo.png" alt="Echowake">
+            <span class="chip accent">ROOM ${esc(v.room)}</span>${chip('turn', 'TURN', `${v.turn}/${v.turnCap}`)}${chip('hp', 'HP', v.hp)}${chip('supplies', 'SUPPLIES', v.supplies)}${chip('loot', 'LOOT', v.loot)}</div>
+            ${list.length > 1 ? `<span class="step">EVENT ${i + 1} OF ${list.length}</span>` : ''}</div>
+          <div class="evbody">
+            <div class="fig"><img src="${IMG[e.tone]}" alt=""><span class="cap">${e.cap}</span></div>
+            <div>
+              <div class="kick">${e.faction ? facIcon(e.faction, 22) : ''}${esc(e.kick)}</div>
+              <h1>${esc(e.title)}</h1>
+              <p class="sub">${e.sub}</p>
+              ${e.notes.length || e.tip ? `<div class="notes">${e.notes.map((n) => `<span>${glyphify(n)}</span>`).join('')}${e.tip ? `<span class="tip">${esc(e.tip)}</span>` : ''}</div>` : ''}
+              <div class="go">
+                <button class="btn primary" id="evNext">${last ? (ending ? 'SEE HOW IT ENDED →' : "WHAT'S YOUR NEXT MOVE?") : 'NEXT EVENT →'}</button>
+                <div class="count"><svg width="18" height="18" viewBox="0 0 18 18" style="transform:rotate(-90deg)"><circle cx="9" cy="9" r="7" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="2"/><circle class="run" cx="9" cy="9" r="7" fill="none" stroke="var(--c)" stroke-width="2" stroke-dasharray="44" style="animation-duration:${EV_MS}ms"/></svg><span>${last ? (ending ? 'RUN OVER IN' : 'BACK TO ROOM IN') : 'NEXT EVENT IN'} <b id="evLeft">${EV_MS / 1000}s</b></span></div>
+              </div>
+            </div>
+          </div>`;
+        box.classList.remove('hide');
+        $('evNext').onclick = next;
+        $('evNext').focus({ preventScroll: true });
+        const t0 = Date.now();
+        tick = setInterval(() => { const l = $('evLeft'); if (l) l.textContent = `${Math.max(0, Math.ceil((EV_MS - (Date.now() - t0)) / 1000))}s`; }, 250);
+        timer = setTimeout(next, EV_MS);
+      }
+      show();
+    });
+  }
+
+  // A plain account of the room, from what the runner can see: loot, switch, marks, intel.
+  function describe(id) {
+    const r = v.rooms[id], bits = [];
+    if (id === v.exit) bits.push('The exit.');
+    bits.push(r.loot ? `${r.loot} loot lies here.` : 'Nothing worth carrying is left here.');
+    if (r.switch) bits.push(`Switch ${r.switch.id}${r.switch.sign ? `: "${r.switch.sign}"` : ', its payoff unknown.'}${r.switch.flipped ? ' It has been flipped.' : ''}`);
+    if (r.switch && v.switchIntel[r.switch.id]) bits.push(`Its true wiring: ${v.switchIntel[r.switch.id]}.`);
+    if (r.switch && r.switch.mark && (r.switch.mark.glyphs || r.switch.mark.faded)) bits.push(`Carved on the switch: ${markWords(r.switch.mark, v)}.`);
+    if (r.mark) bits.push(`Carved over the room: ${markWords(r.mark, v)}.`);
+    if (r.scratch) bits.push(`Scratched by ${r.scratch.mine ? 'you' : r.scratch.by}: "${r.scratch.target} ${r.scratch.glyph}". Unchecked.`);
+    if (r.intel) bits.push(`Your ${r.intel.how} (turn ${r.intel.turn}): ${r.intel.result}.`);
+    if (v.myTrapRooms.includes(id)) bits.push('You left a trap here.');
+    return bits.join(' ');
+  }
+
+  function render() {
+    const m = seed();
+    const here = v.rooms[v.room];
+    $('chips').innerHTML = [
+      `<span class="chip accent">ROOM ${esc(v.room)}</span>`,
+      `<span class="chip ${v.turn / v.turnCap > .75 ? 'warn' : ''}">TURN ${v.turn}/${v.turnCap}</span>`,
+      `<span class="chip ${v.hp <= 4 ? 'warn' : ''}">HP ${v.hp}</span>`,
+      `<span class="chip">SUPPLIES ${v.supplies}</span>`,
+      `<span class="chip">LOOT ${v.loot}</span>`,
+      `<span class="chip">${esc(v.runner.toUpperCase())} ${fac(v.faction)}</span>`,
+    ].join('');
+    $('turnText').textContent = `TURN ${v.turn} OF ${v.turnCap}`;
+
+    const mix = Object.entries(claim.briefing || {});
+    const stronger = mix.filter(([f]) => Sim.beats(f, v.faction)).map(([f]) => Sim.FACTIONS[f].label);
+    const briefing = mix.length ? ` Traps on this chain were set by ${mix.map(([f, n]) => `${Sim.FACTIONS[f].label} ×${n}`).join(', ')}${stronger.length ? `; each ${stronger.join('/')} Spike, Snare or Leech that springs on you is worth +${Sim.UPSET_BONUS} if you escape` : ''}.` : '';
+    $('banner').textContent = v.practice ? `Practice run: ${v.practice}. Not scored or handed on.`
+      : claim.ranked === false ? `Opening run ${claim.position} of ${claim.openers}: it hands on and earns designer credit, but isn't ranked.${briefing}`
+      : `Ranked run, chain position ${claim.position}. Finishing saves it onto the chain.${briefing}`;
+
+    $('seedName').textContent = m.name;
+    $('roomName').textContent = `${m.rooms[v.room].label}`;
+    $('roomText').innerHTML = glyphify(describe(v.room));
+
+    // The planned route, from the strategy chosen in the lobby, recomputed from where the runner stands.
+    const p = plan(m, v, strategy);
+    $('route').classList.toggle('hide', !p);
+    if (p) {
+      $('route').innerHTML = `<span class="label accent">Planned route</span><span class="steps">${p.rooms.map((id, i) => `<span class="step ${i === 0 ? 'now' : ''}">${id}</span>${i < p.rooms.length - 1 ? '<span class="arrow">→</span>' : ''}`).join('')}</span>`
+        + `<span style="font:12px var(--sans);color:var(--dim)">Next: <b style="color:var(--paper);font-weight:500">${esc(p.next)}</b> · ${p.turns} turn${p.turns === 1 ? '' : 's'} to the exit</span>`;
+    }
+
+    // The action dock: verbs on the left, the chosen verb's choices in the middle, leaving a trap on the right.
+    const adj = Sim.neighbors(m, v.room);
+    const sw = here.switch;
+    const prices = v.prices.drop;
+    const kinds = Object.entries(Sim.KINDS).filter(([k]) => prices[k] !== undefined && prices[k] <= v.loot);
+    const cheapest = Math.min(...Object.entries(prices).filter(([k]) => !k.includes('@')).map(([, p]) => p));
+    const mineCount = Object.values(v.rooms).filter((r) => r.scratch && r.scratch.mine).length;
+    const canScratch = v.rules >= 8 && v.supplies >= Sim.SCRATCH.cost && mineCount < Sim.SCRATCH.perRun && !(here.scratch && here.scratch.mine);
+    // A switch offers a flip (once) and reading its wiring (once, if affordable); with neither left it has no action.
+    const swFlip = sw && !sw.flipped;
+    const swRead = sw && !(sw.id in v.switchIntel) && v.supplies >= R.inspectSwitchCost;
+    // Rules 13: rooms next door that this run's peek or inspect found something in, not yet disarmed.
+    const disarmable = v.rules >= 13 ? adj.filter((id) => v.rooms[id].intel && v.rooms[id].intel.result !== 'empty' && v.rooms[id].intel.how !== 'disarm') : [];
+    // Only actions with something to press are listed: no greyed-out verbs.
+    const verbs = [
+      { id: 'move', label: 'Move', cost: '1 TURN', say: 'Choose room', hint: 'Leaves this room; the turn advances.' },
+      v.supplies >= R.peekCost ? { id: 'peek', label: 'Peek', cost: `${R.peekCost} SUPPLY`, say: 'Choose room', hint: 'Learn whether a room holds anything, and whose sign it bears.' } : null,
+      v.supplies >= R.inspectCost ? { id: 'inspect', label: 'Inspect', cost: `${R.inspectCost} SUPPLIES`, say: 'Choose room', hint: 'Learn exactly what waits in a room.' } : null,
+      disarmable.length && v.supplies >= R.disarmCost ? { id: 'disarm', label: 'Disarm', cost: `${R.disarmCost} SUPPLIES · 1 TURN`, say: 'Choose room', hint: 'Neutralise what you found next door, for this run. You learn what it was.' } : null,
+      swFlip || swRead ? { id: 'switch', label: `Switch ${sw.id}`, cost: swFlip ? '1 TURN' : `READ · ${R.inspectSwitchCost} SUPPLIES`, say: swFlip && swRead ? 'Flip or read it' : swFlip ? 'Flip it' : 'Read its wiring', hint: sw.sign ? `Its sign: "${sw.sign}"` : 'Its payoff is unknown.' } : null,
+      { id: 'wait', label: 'Wait', cost: '1 TURN', say: 'Stay put', hint: 'Let a turn pass here.' },
+      canScratch ? { id: 'scratch', label: 'Scratch a mark', cost: `${Sim.SCRATCH.cost} SUPPLY`, say: 'Room and glyph', hint: `Signed with your name. ${Sim.SCRATCH.perRun - mineCount} left this run.` } : null,
+      v.myTrapRooms.length && Object.keys(v.switchIntel).length ? { id: 'rewire', label: 'Rewire', cost: 'LOOT', say: 'Switch to your trap', hint: 'Wire an inspected switch to a trap you left.' } : null,
+    ].filter(Boolean);
+    const all = verbs.concat([{ id: 'drop', label: 'Leave a trap', say: 'Kind and timing', hint: 'Carries forward only if you reach the exit.' }]);
+    if (!all.find((x) => x.id === verb) || (verb === 'drop' && !kinds.length)) verb = 'move';
+    const cur = all.find((x) => x.id === verb);
+
+    $('verbs').innerHTML = `<span class="label dockhead">Action</span>` + verbs.map((x) => `<button class="verb ${x.id === verb ? 'on' : ''} ${x.id === 'switch' && flipNext(p) ? 'suggest' : ''}" data-verb="${x.id}" ${x.id === 'switch' && flipNext(p) ? 'title="Next on your planned route"' : ''}><span><span>${esc(x.label)}</span><span class="cost">${esc(x.cost)}</span></span><span class="chev">›</span></button>`).join('');
+    $('trapbox').innerHTML = `<span class="label dockhead" style="color:var(--amber)">Leave a trap</span>
+      <button class="trapbtn ${verb === 'drop' ? 'on' : ''}" data-verb="drop" ${kinds.length ? '' : 'disabled'}>
+        <svg width="30" height="40" viewBox="0 0 30 40" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 3h22M4 37h22M7 3c0 10 16 12 16 17S7 27 7 37M23 3c0 10-16 12-16 17s16 7 16 17"/><path d="M11 33h8l-4-5z" fill="currentColor" stroke="none"/></svg>
+        <b>DROP TRAP</b><span class="cost">${kinds.length ? `FROM ${Math.min(...kinds.map(([k]) => prices[k]))} LOOT` : cheapest === Infinity ? 'NOT IN THIS ROOM' : `NEEDS ${cheapest} LOOT`}</span></button>`;
+
+    // Middle: the choices for the chosen verb. The planned route's next room gets a dashed outline on its Move button.
+    const suggested = nextRoom(p);
+    const roomCard = (id, act, title, extra, disabled) => {
+      const r = v.rooms[id];
+      const tag = [r.loot ? `◆${r.loot}` : '', r.switch ? `⚙${r.switch.id}` : '', id === v.exit ? 'EXIT' : ''].filter(Boolean).join(' · ');
+      return `<button class="opt ${act === `move ${suggested}` && !disabled ? 'suggest' : ''}" data-act="${act}" ${disabled ? 'disabled' : ''} ${act === `move ${suggested}` ? 'title="Next on your planned route"' : ''}><span class="t"><b>${esc(title)}</b><span class="tag">${esc(tag)}</span></span><span class="s">${esc(m.rooms[id].label)}${extra ? ` · ${esc(extra)}` : ''}</span></button>`;
+    };
+    let body = '';
+    if (verb === 'move' || verb === 'peek' || verb === 'inspect') {
+      body = `<div class="optgrid">${adj.map((id) => {
+        const door = v.doors.find((d) => d.between === Sim.edgeKey(v.room, id));
+        const closed = verb === 'move' && door && door.closed;
+        const intel = v.rooms[id].intel ? `your ${v.rooms[id].intel.how}: ${v.rooms[id].intel.result}` : '';
+        return roomCard(id, `${verb} ${id}`, closed ? `Door to ${id} closed` : `${cur.label} ${verb === 'move' ? 'to Room ' : ''}${id}`, intel, closed);
+      }).join('')}</div>`;
+    } else if (verb === 'disarm') {
+      body = `<div class="optgrid">${disarmable.map((id) => roomCard(id, `disarm ${id}`, `Disarm ${id}`, `your ${v.rooms[id].intel.how}: ${v.rooms[id].intel.result}`, false)).join('')}</div>`;
+    } else if (verb === 'switch') {
+      // Only the things to press: what the switch says and what it is wired to are in the room text above.
+      const opts = [];
+      if (swFlip) opts.push(`<button class="opt ${flipNext(p) ? 'suggest' : ''}" data-act="flip" ${flipNext(p) ? 'title="Next on your planned route"' : ''}><span class="t"><b>Flip ${sw.id}</b><span class="tag">1 TURN</span></span><span class="s">${esc(sw.sign || 'Payoff unknown')}</span></button>`);
+      if (swRead) opts.push(`<button class="opt" data-act="inspect ${sw.id}"><span class="t"><b>Inspect ${sw.id}'s wiring</b><span class="tag">${R.inspectSwitchCost} SUPPLIES</span></span><span class="s">Learn what it really does.</span></button>`);
+      body = `<div class="optgrid">${opts.join('')}</div>`;
+    } else if (verb === 'wait') {
+      body = `<div class="optgrid"><button class="opt" data-act="wait"><span class="t"><b>Wait one turn</b><span class="tag">1 TURN</span></span><span class="s">Timers tick on; nothing else changes.</span></button></div>`;
+    } else if (verb === 'drop') {
+      const inspected = Object.keys(v.switchIntel);
+      body = `<div class="formrow">
+          <select class="field" id="dKind">${kinds.map(([k, d]) => `<option value="${k}">${esc(d.label)} (${prices[k]}): ${esc(d.desc)}</option>`).join('')}</select>
+          <select class="field" id="dArmed"><option value="armed">armed</option>${inspected.length ? '<option value="dormant">dormant</option>' : ''}</select>
+          <label><input type="checkbox" id="dTimed"> timed, turn <input class="field" id="dAt" type="number" min="1" max="${v.turnCap}" value="${Math.min(9, v.turnCap)}" style="width:64px"> <span id="dPartner"></span></label>
+          <select class="field hide" id="dWire">${inspected.map((k) => `<option value="${k}">woken by ${k}</option>`).join('')}</select>
+          <button class="btn warn" id="dropBtn"><span>Drop in ${esc(v.room)}</span><span class="cost" id="dropCost"></span></button>
+        </div>
+        <div class="droprule">Timed traps change on the turn you pick: harmful ones turn helpful, helpful ones turn harmful, and a Decoy turns into a Spike.</div>
+        ${Sim.forcedRooms(m).includes(v.room) ? `<div class="droprule" style="color:var(--amber)">Every route crosses ${esc(v.room)}: the best line meets whatever you leave here too, so its harm or help earns nothing. Only supplies runners spend scouting it can earn.</div>` : ''}`;
+    } else if (verb === 'scratch') {
+      const T = Sim.TIERS[m.tier];
+      body = `<div class="formrow">
+          <select class="field" id="xTarget">${Object.keys(v.rooms).map((id) => `<option>${id}</option>`).join('')}</select>
+          <select class="field" id="xGlyph">${[...T.glyphs.noun, ...T.glyphs.verb].map((g) => `<option value="${g}">${Sim.GLYPH_DISPLAY[g]} ${Sim.GLYPH_DISPLAY_NAMES[g]}${v.glyphs[g] ? ` (${esc(v.glyphs[g])})` : ''}</option>`).join('')}</select>
+          <button class="btn" id="scratchBtn"><span>Scratch here</span><span class="cost">${Sim.SCRATCH.cost} SUPPLY</span></button>
+        </div>`;
+    } else if (verb === 'rewire') {
+      body = `<div class="formrow">
+          <select class="field" id="wSw">${Object.keys(v.switchIntel).map((k) => `<option>${k}</option>`).join('')}</select>
+          <select class="field" id="wEff"><option>arm</option><option>disarm</option><option>invert</option><option>none</option></select>
+          <select class="field" id="wTo">${v.myTrapRooms.map((r) => `<option>${r}</option>`).join('')}</select>
+          <button class="btn" id="wireBtn"><span>Wire</span><span class="cost" id="wireCost"></span></button>
+        </div>`;
+    }
+    const mineNote = v.myTraps.length ? `<div class="muted" style="font:12px var(--sans)">Your traps: ${v.myTraps.map(esc).join(' · ')}${v.myWiring.length ? ` · wires: ${v.myWiring.map(esc).join(', ')}` : ''}. They carry forward only if you reach the exit.</div>` : '';
+    $('opts').innerHTML = `<div class="opthead"><span class="label accent">${esc(cur.label)} › ${esc(cur.say)}</span><span class="muted">${esc(cur.hint)}</span></div>${body}${mineNote}`;
+
+    for (const b of document.querySelectorAll('[data-verb]')) b.onclick = () => { verb = b.dataset.verb; render(); };
+    const dropCost = () => {
+      const k = $('dKind').value, timed = $('dTimed').checked;
+      $('dWire').classList.toggle('hide', $('dArmed').value !== 'dormant');
+      $('dropCost').textContent = `${prices[timed ? `${k}@timed` : k]} LOOT${timed ? ` · BECOMES ${Sim.KINDS[Sim.KINDS[k].then].label.toUpperCase()}` : ''}`;
+      const chip = (x) => `<span class="kindchip ${Sim.KINDS[x].boon ? 'boon' : x === 'decoy' ? 'flat' : 'harm'}">${esc(Sim.KINDS[x].label)}</span>`;
+      $('dPartner').innerHTML = `${chip(k)} → ${chip(Sim.KINDS[k].then)}`;
+    };
+    if ($('dKind')) {
+      for (const id of ['dKind', 'dArmed', 'dTimed']) $(id).oninput = dropCost;
+      dropCost();
+      $('dropBtn').onclick = () => {
+        let c = `drop ${$('dKind').value} ${$('dArmed').value}`;
+        if ($('dTimed').checked) c += ` at ${$('dAt').value}`;
+        if ($('dArmed').value === 'dormant') c += ` wire ${$('dWire').value} arm`;
+        act(c);
+      };
+    }
+    if ($('scratchBtn')) $('scratchBtn').onclick = () => act(`scratch ${$('xTarget').value} ${$('xGlyph').value}`);
+    if ($('wireBtn')) {
+      const wc = () => { $('wireCost').textContent = v.prices.rewire[$('wSw').value] ? `${v.prices.rewire[$('wSw').value]} LOOT` : 'FREE'; };
+      $('wSw').oninput = wc; wc();
+      $('wireBtn').onclick = () => act(`wire ${$('wSw').value} ${$('wEff').value} ${$('wTo').value}`);
+    }
+    for (const b of document.querySelectorAll('[data-act]')) b.onclick = () => act(b.dataset.act);
+
+    $('log').innerHTML = v.log.map((l) => `<div class="${/springs|catches|drains/.test(l) ? 'spring' : / means \S+ on this seed|wire on the map|carved wire/.test(l) ? 'hint' : ''}">${glyphify(l)}</div>`).join('');
+    $('log').scrollTop = 1e6;
+    if (!$('overlay').classList.contains('hide')) renderMap();
+    renderMini();
+    renderHint();
+  }
+
+  // ---------- the small map: drag to pan, scroll or +/− to zoom, ⤢ (or M) for the full map ----------
+  function renderMini() {
+    const m = seed();
+    const p = plan(m, v, strategy);
+    $('mmInner').innerHTML = mapSVG(m, v, { route: p, next: nextRoom(p) });
+    if (mm.room !== v.room) { mm.room = v.room; focusMini(); } else applyMini();
+  }
+  // Zoom to the current room and the rooms attached to it, centred on the current room. The map's SVG is drawn with
+  // viewBox -40 -70 870 470 and scaled to fit the viewport, so map units turn into viewport pixels first.
+  function focusMini() {
+    const m = seed(), vp = $('mmVp'), w = vp.clientWidth, h = vp.clientHeight;
+    if (!w || !h) return;
+    const s0 = Math.min(w / 870, h / 470), ox = (w - 870 * s0) / 2, oy = (h - 470 * s0) / 2;
+    const px = (id) => [ox + (m.rooms[id].x + 40) * s0, oy + (m.rooms[id].y + 70) * s0];
+    const ids = [v.room, ...Sim.neighbors(m, v.room)];
+    const pts = ids.map(px), pad = 46 * s0;
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    const [cx, cy] = px(v.room);
+    const halfW = Math.max(cx - Math.min(...xs), Math.max(...xs) - cx) + pad, halfH = Math.max(cy - Math.min(...ys), Math.max(...ys) - cy) + pad;
+    mm.z = Math.min(4, Math.max(1, Math.min(w / (2 * halfW), h / (2 * halfH))));
+    mm.x = w / 2 - cx * mm.z; mm.y = h / 2 - cy * mm.z;
+    applyMini();
+  }
+  function applyMini() {
+    mm.z = Math.min(4, Math.max(1, mm.z));
+    const vp = $('mmVp'), w = vp.clientWidth, h = vp.clientHeight;
+    // Keep at least a third of the viewport on the map, so the current room can sit at the centre near an edge.
+    mm.x = Math.min(w * .5, Math.max(w * .5 - w * mm.z, mm.x));
+    mm.y = Math.min(h * .5, Math.max(h * .5 - h * mm.z, mm.y));
+    $('mmInner').style.transform = `translate(${mm.x}px, ${mm.y}px) scale(${mm.z})`;
+    $('mmFoot').textContent = `DRAG TO PAN · SCROLL TO ZOOM · ${Math.round(mm.z * 100)}%`;
+  }
+  function zoomAt(f, cx, cy) {
+    const z = Math.min(4, Math.max(1, mm.z * f));
+    mm.x = cx - (cx - mm.x) * (z / mm.z); mm.y = cy - (cy - mm.y) * (z / mm.z); mm.z = z;
+    applyMini();
+  }
+  {
+    const vp = $('mmVp');
+    let drag = null;
+    vp.addEventListener('pointerdown', (e) => { drag = { x: e.clientX - mm.x, y: e.clientY - mm.y }; vp.setPointerCapture(e.pointerId); vp.classList.add('drag'); });
+    vp.addEventListener('pointermove', (e) => { if (!drag) return; mm.x = e.clientX - drag.x; mm.y = e.clientY - drag.y; applyMini(); });
+    const up = () => { drag = null; vp.classList.remove('drag'); };
+    vp.addEventListener('pointerup', up); vp.addEventListener('pointercancel', up);
+    vp.addEventListener('wheel', (e) => { e.preventDefault(); const r = vp.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.2 : 1 / 1.2, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+    $('mmIn').onclick = () => zoomAt(1.25, vp.clientWidth / 2, vp.clientHeight / 2);
+    $('mmOut').onclick = () => zoomAt(0.8, vp.clientWidth / 2, vp.clientHeight / 2);
+    $('mmReset').onclick = focusMini;
+    $('mmReset').title = 'Centre on your room';
+    window.addEventListener('resize', applyMini);
+  }
+
+  function renderMap() {
+    const m = seed();
+    $('ovSeed').textContent = m.name;
+    const p = plan(m, v, strategy);
+    $('map').innerHTML = mapSVG(m, v, { sel, route: p, next: nextRoom(p) });
+    for (const g of $('map').querySelectorAll('.room')) g.onclick = () => { sel = g.dataset.room; renderMap(); };
+    $('selInfo').innerHTML = sel ? `<b style="color:var(--paper)">${esc(m.rooms[sel].label)} · ${sel}</b> · ${glyphify(describe(sel))}` : 'Click a room to read it.';
+  }
+  $('mapBtn').onclick = () => { $('overlay').classList.remove('hide'); layers(); renderMap(); };
+  $('closeMap').onclick = () => $('overlay').classList.add('hide');
+  document.addEventListener('keydown', (e) => { if (!$('ev').classList.contains('hide')) return; if (e.key === 'Escape') $('overlay').classList.add('hide'); if (e.key === 'm' && !/INPUT|SELECT/.test(document.activeElement.tagName)) $('mapBtn').click(); });
+
+  load();
+})();
+</script>
+</body>
+</html>

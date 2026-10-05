@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relay Moto · Prototype</title>
+<style>
+  :root {
+    --bg: #15120e; --panel: #201a14; --line: #3d3226; --text: #f2ece2; --dim: #b9ab98; --faint: #85786a;
+    --dirt: #8a6a45; --dirt2: #6f5436; --mud: #4a3624; --cool: #3f86b8; --grass: #4f8a3a; --whoops: #a07c50;
+    --accent: #f2c14e; --harm: #e0705a; --boon: #6fd0c8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font: 600 18px Georgia, serif; letter-spacing: .02em; }
+  header .meta { color: var(--dim); font-size: 13px; }
+  header input { width: 110px; }
+  input, button { font: inherit; color: var(--text); background: #120f0b; border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button.on { background: var(--accent); color: #221a08; border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 380px); gap: 16px; padding: 16px 18px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+  .card h2 { margin: 0 0 6px; font: 600 12px system-ui; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+  canvas { display: block; width: 100%; border-radius: 4px; }
+  #strip { cursor: default; }
+  #strip.build { cursor: crosshair; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .muted { color: var(--dim); font-size: 13px; }
+  .err { color: var(--harm); font-size: 13px; min-height: 1em; }
+  .big { font: 600 22px Georgia, serif; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  td, th { padding: 3px 6px; text-align: left; border-bottom: 1px solid var(--line); }
+  th { color: var(--faint); font-weight: 500; }
+  .piece { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+  .piece:hover { border-color: var(--accent); }
+  .piece.on { border-color: var(--accent); background: #2c2414; }
+  .piece small { grid-column: 1 / -1; color: var(--dim); }
+  .tag { font-size: 11px; padding: 0 5px; border-radius: 3px; }
+  .tag.harm { background: rgba(224,112,90,.2); color: var(--harm); } .tag.boon { background: rgba(111,208,200,.18); color: var(--boon); } .tag.bluff { background: rgba(242,193,78,.15); color: var(--accent); }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; color: var(--dim); }
+  kbd { font: 12px ui-monospace, monospace; padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; color: var(--text); }
+  .pad { display: none; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 8px; }
+  .pad button { padding: 12px 0; touch-action: none; user-select: none; }
+  @media (pointer: coarse) { .pad { display: grid; } }
+  @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Relay Moto</h1>
+  <span class="meta">Prototype · a hot-seat chain on this browser</span>
+  <label class="meta">Track <input id="track" type="number" min="1" value="1"></label>
+  <label class="meta">Rider <input id="rider" placeholder="your name"></label>
+  <button id="go" class="on">Race</button>
+  <button id="reset" title="Clear this track's chain on this browser">Reset chain</button>
+</header>
+<main>
+  <div class="col">
+    <div class="card">
+      <h2 id="striphead">The track</h2>
+      <canvas id="strip" height="96"></canvas>
+      <div class="muted" id="stripkey" style="margin-top:6px"></div>
+    </div>
+    <div class="card">
+      <canvas id="view" height="320"></canvas>
+      <div class="pad" id="pad">
+        <button data-k="up">Lane ↑</button><button data-k="down">Lane ↓</button><button data-k="back">Lean ◀</button><button data-k="fwd">Lean ▶</button><button data-k="gas">Gas</button><button data-k="turbo">Turbo</button>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card" id="status"></div>
+    <div class="card" id="build" style="display:none"></div>
+    <div class="card">
+      <h2>Controls</h2>
+      <div class="keys">
+        <span><kbd>Z</kbd> or <kbd>J</kbd></span><span>throttle (hold)</span>
+        <span><kbd>X</kbd> or <kbd>K</kbd></span><span>turbo (hold): faster, much hotter</span>
+        <span><kbd>↑</kbd> <kbd>↓</kbd></span><span>change lane (on the ground)</span>
+        <span><kbd>←</kbd> <kbd>→</kbd></span><span>lean back / forward: in the air it turns the bike, on the ground ← lifts a wheelie (over whoops and hurdles)</span>
+      </div>
+      <div class="muted" style="margin-top:6px">Land with the bike matching the ground's slope: within 15° is clean (on a down slope, a little faster), up to 30° rough, beyond that a crash. The throttle warms the engine to 50 % at most; turbo heats it fast, and over 100 % the bike stops for 3 s. Coasting, the air and cool zones bring it down.</div>
+    </div>
+    <div class="card" id="chaincard"></div>
+  </div>
+</main>
+<script src="moto-sim.js"></script>
+<script>
+(() => {
+  const M = window.RelayMoto;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const sec = (t) => (t / M.TICK).toFixed(2);
+  const LIFETIME = 6;
+  const COLORS = ['#f2c14e', '#e0705a', '#6fd0c8', '#b58cff', '#9fd36a'];
+  const ZONE = { mud: '#4a3624', cool: '#3f86b8', grass: '#4f8a3a', whoops: '#a07c50', oil: '#151515', boost: '#f2c14e', coolant: '#6fd0f0', landing: '#d9c9a8', hurdle: '#e0705a', dust: 'rgba(200,190,170,.55)' };
+  const PIECE_MUD = '#2e2014';
+
+  // ---------- the chain on this browser ----------
+  let trackNo = 1, base = null, chain = null;
+  const chainKey = (n) => `relay-moto:chain:moto#${n}`;
+  // A chain saved under an older engine (other physics or tracks) is started afresh: its times and pieces don't fit.
+  let resetNote = '';
+  const fresh = () => ({ engine: M.ENGINE, pieces: [], riders: [], next: 1, credit: {} });
+  const loadChain = (n) => {
+    resetNote = '';
+    let c = null;
+    try { c = JSON.parse(localStorage.getItem(chainKey(n))); } catch (e) { /* storage blocked */ }
+    if (!c) return fresh();
+    if (c.engine !== M.ENGINE) { resetNote = `This track's chain (${(c.riders || []).length} rider${(c.riders || []).length === 1 ? '' : 's'}) was saved under an older version of the game, so it starts afresh.`; try { localStorage.removeItem(chainKey(n)); } catch (e) { /* */ } return fresh(); }
+    return c;
+  };
+  const saveChain = () => { try { chain.engine = M.ENGINE; localStorage.setItem(chainKey(trackNo), JSON.stringify(chain)); } catch (e) { /* storage blocked */ } };
+  try { $('rider').value = localStorage.getItem('relay-moto:name') || ''; } catch (e) { /* */ }
+
+  function setTrack(n) {
+    trackNo = Math.max(1, Math.floor(Number(n) || 1));
+    $('track').value = trackNo;
+    base = M.genTrack(`moto#${trackNo}`);
+    chain = loadChain(trackNo);
+    prefetch();
+    phase = 'idle'; world = null; result = null;
+    render();
+  }
+  $('track').onchange = () => { if (phase !== 'race' && phase !== 'countdown') setTrack($('track').value); };
+  $('reset').onclick = () => {
+    if (phase === 'race' || phase === 'countdown') return;
+    if (!confirm(`Clear the chain for track ${trackNo} on this browser? Every rider and piece on it goes.`)) return;
+    try { localStorage.removeItem(chainKey(trackNo)); } catch (e) { /* */ }
+    setTrack(trackNo);
+  };
+
+  // ---------- the par worker ----------
+  const worker = new Worker('par-worker.js');
+  const waiting = new Map();
+  let jobNo = 0;
+  worker.onmessage = (e) => { const f = waiting.get(e.data.key); if (f) { waiting.delete(e.data.key); f(e.data); } };
+  const job = (msg) => new Promise((res) => { const key = ++jobNo; waiting.set(key, res); worker.postMessage({ ...msg, key, id: `moto#${trackNo}` }); });
+  // Par for a set of pieces depends only on the track and the pieces, never on who rode, so it's worked out once per
+  // set and kept in the chain (`chain.pars`, by the pieces' ids). Each search takes several seconds; credit needs par
+  // on the track faced and par without each earlier piece, so the page works them out in the background as soon as a
+  // chain is opened or handed over, while the next rider races.
+  const parKey = (pieces) => pieces.map((p) => p.id).sort().join(',') || '-';
+  const inFlight = new Map();
+  function getPar(pieces) {
+    const k = parKey(pieces), n = trackNo, c = chain;
+    if (c.pars && c.pars[k]) return Promise.resolve(c.pars[k]);
+    const fk = `${n}|${k}`;
+    if (!inFlight.has(fk)) inFlight.set(fk, job({ job: 'par', pieces }).then((p) => {
+      inFlight.delete(fk);
+      const v = { time: p.time, clean: p.clean };
+      if (trackNo === n && chain === c) { (c.pars || (c.pars = {}))[k] = v; saveChain(); }
+      return v;
+    }));
+    return inFlight.get(fk);
+  }
+  // The pars a rider on this chain will need: the track as it stands, and without each piece.
+  function prefetch() {
+    const ps = chain.pieces;
+    getPar(ps);
+    for (const f of ps) getPar(ps.filter((q) => q.id !== f.id));
+  }
+
+  // ---------- state ----------
+  let phase = 'idle'; // idle, countdown, race, done (result and build)
+  let T = null, world = null, inputs = [], result = null, flash = null, countdownAt = 0, startAt = 0;
+  let drafts = [], pick = 'boost', buildErr = '', hover = null, handing = false;
+  const keys = { gas: false, turbo: false, back: false, fwd: false };
+  let laneReq = 0, laneReqTicks = 0;
+
+  // ---------- input ----------
+  const KEYMAP = { KeyZ: 'gas', KeyJ: 'gas', KeyX: 'turbo', KeyK: 'turbo', ArrowLeft: 'back', KeyA: 'back', ArrowRight: 'fwd', KeyD: 'fwd' };
+  document.addEventListener('keydown', (ev) => {
+    if (ev.target.tagName === 'INPUT') return;
+    if (phase === 'race' || phase === 'countdown') {
+      if (KEYMAP[ev.code]) { keys[KEYMAP[ev.code]] = true; ev.preventDefault(); }
+      if (ev.code === 'ArrowUp' || ev.code === 'KeyW') { laneReq = 1; laneReqTicks = 15; ev.preventDefault(); }
+      if (ev.code === 'ArrowDown' || ev.code === 'KeyS') { laneReq = -1; laneReqTicks = 15; ev.preventDefault(); }
+      if (ev.code === 'Space') ev.preventDefault();
+    } else if ((ev.code === 'Enter') && phase === 'idle') { ev.preventDefault(); startRace(); }
+  });
+  document.addEventListener('keyup', (ev) => { if (KEYMAP[ev.code]) keys[KEYMAP[ev.code]] = false; });
+  window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+  for (const b of document.querySelectorAll('#pad button')) {
+    const k = b.dataset.k;
+    const on = (ev) => { ev.preventDefault(); if (k === 'up' || k === 'down') { laneReq = k === 'up' ? 1 : -1; laneReqTicks = 15; } else keys[k] = true; };
+    const off = (ev) => { ev.preventDefault(); if (keys[k] !== undefined) keys[k] = false; };
+    b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
+  }
+  // The input for this tick. A lane change pressed a moment early (in the air, or mid-change) waits up to a
+  // quarter-second for the bike to be able to take it.
+  function inputNow() {
+    const r = world.r[0];
+    let lane = 0;
+    if (laneReq && laneReqTicks > 0) {
+      if (!r.air && r.laneT === 0 && r.down === 0) { lane = laneReq; laneReq = 0; }
+      else if (--laneReqTicks === 0) laneReq = 0;
+    }
+    return { thr: keys.turbo ? 2 : keys.gas ? 1 : 0, lane, lean: keys.back && !keys.fwd ? 1 : keys.fwd && !keys.back ? -1 : 0 };
+  }
+
+  // ---------- racing ----------
+  function startRace() {
+    const name = $('rider').value.trim();
+    if (!name) { $('rider').focus(); $('status').querySelector('.err') && ($('status').querySelector('.err').textContent = 'Enter a rider name first.'); return; }
+    try { localStorage.setItem('relay-moto:name', name); } catch (e) { /* */ }
+    T = M.trackWith(base, chain.pieces);
+    world = M.startWorld(T); inputs = []; result = null; flash = null; drafts = []; buildErr = '';
+    for (const k in keys) keys[k] = false;
+    laneReq = 0;
+    phase = 'countdown'; countdownAt = performance.now();
+    $('go').disabled = true;
+    render();
+    requestAnimationFrame(frame);
+  }
+  $('go').onclick = () => { if (phase === 'idle') startRace(); else if (phase === 'done') { phase = 'idle'; render(); } };
+
+  let acc = 0, last = 0;
+  function frame(now) {
+    if (phase === 'countdown') {
+      if (now - countdownAt >= 3000) { phase = 'race'; startAt = now; last = now; acc = 0; }
+      drawView(); drawStrip();
+      requestAnimationFrame(frame);
+      return;
+    }
+    if (phase !== 'race') return;
+    acc += Math.min(100, now - last); last = now;
+    const dt = 1000 / M.TICK;
+    while (acc >= dt && phase === 'race') {
+      acc -= dt;
+      const a = inputNow(), log = [];
+      inputs.push(M.encode(a));
+      M.step(T, world, a, log);
+      for (const e of log) if (e.i === 0 && e.e !== 'finish') flash = { e, at: now };
+      if (world.r[0].fin >= 0 || world.t >= M.MAX_TICKS) finish();
+    }
+    drawView(); drawStrip();
+    if (phase === 'race') requestAnimationFrame(frame);
+  }
+
+  function finish() {
+    const r = world.r[0];
+    const time = r.fin >= 0 ? r.fin + 1 : M.MAX_TICKS;
+    // The server's check, here: the input log alone must give the same time.
+    const rp = M.replay(T, inputs);
+    result = { name: $('rider').value.trim(), time, place: M.placeOf(world, 0), crashes: r.crashes, overheats: r.overheats, roughs: r.roughs, inputs: inputs.slice(), verified: rp.time === time, par: null, credit: null, faced: chain.pieces.map((p) => ({ ...p })) };
+    phase = 'done';
+    $('go').disabled = false;
+    render();
+    const mine = result;
+    getPar(mine.faced).then(async (p) => {
+      mine.par = p.time; render();
+      const others = mine.faced.filter((f) => f.owner !== mine.name);
+      if (!others.length) { mine.credit = []; render(); return; }
+      const without = {};
+      for (const f of others) without[f.id] = (await getPar(mine.faced.filter((q) => q.id !== f.id))).time;
+      // With the pars in hand, credit is only the replays across each piece: a few milliseconds.
+      mine.credit = M.credit(base, mine.faced, { runner: mine.name, inputs: mine.inputs }, { with: p.time, without });
+      render();
+    });
+  }
+
+  // ---------- building ----------
+  const runTag = () => chain.riders.length + 1;
+  const thirdOf = (x) => (x < base.thirds[1] ? 0 : x < base.thirds[2] ? 1 : 2);
+  function draftAt(m, lane) {
+    const x = m * M.U;
+    const i = drafts.findIndex((p) => p.lane === lane && x >= p.x && x < p.x + M.PIECES[p.kind].len * M.U);
+    if (i >= 0) { drafts.splice(i, 1); buildErr = ''; render(); return; }
+    const p = { id: `p${chain.next + drafts.length}`, owner: result.name, run: runTag(), kind: pick, x, lane, age: 0 };
+    const err = M.placementError(base, chain.pieces.concat(drafts), p, { quick: true });
+    if (err) { buildErr = err; render(); return; }
+    drafts.push(p); buildErr = ''; render();
+  }
+  async function handOver() {
+    if (handing) return;
+    handing = true; buildErr = ''; render();
+    const next = chain.pieces.map((p) => ({ ...p, age: (p.age || 0) + 1 })).filter((p) => p.age < LIFETIME).concat(drafts);
+    if (drafts.length) {
+      const p = await getPar(next);
+      if (!p.clean) { handing = false; buildErr = 'With these pieces par can\'t find a line without a crash or an overheat. Move or remove one.'; render(); return; }
+    }
+    const cost = drafts.reduce((s, p) => s + M.PIECES[p.kind].cost, 0);
+    for (const c of result.credit || []) { const k = chain.credit[c.owner] || (chain.credit[c.owner] = { harm: 0, aid: 0 }); k.harm += c.harm; k.aid += c.aid; }
+    chain.riders.push({ name: result.name, time: result.time, par: result.par, cost, place: result.place, left: drafts.map((p) => p.kind), credit: (result.credit || []).map((c) => ({ owner: c.owner, kind: c.kind, harm: c.harm, aid: c.aid })) });
+    chain.pieces = next;
+    chain.next += drafts.length;
+    chain.pars = Object.fromEntries(Object.entries(chain.pars || {}).filter(([k]) => k.split(',').every((id) => id === '-' || next.some((p) => p.id === id))));
+    saveChain();
+    prefetch();
+    drafts = []; handing = false; phase = 'idle'; world = null; result = null;
+    $('rider').value = ''; $('rider').focus();
+    render();
+  }
+
+  // ---------- drawing: the strip ----------
+  const STRIP = { prof: 24, lane: 17 };
+  function fitCanvas(c, h) {
+    const w = c.clientWidth || 600, dpr = window.devicePixelRatio || 1;
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); c.style.height = h + 'px'; }
+    const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { g, w, h };
+  }
+  function drawStrip() {
+    const Tn = T && phase !== 'idle' ? T : M.trackWith(base, chain.pieces);
+    const { g, w, h } = fitCanvas($('strip'), STRIP.prof + 4 * STRIP.lane + 6);
+    const L = M.LENGTH_M, sx = (m) => (m / L) * w;
+    g.clearRect(0, 0, w, h);
+    // Profile.
+    g.fillStyle = '#2a2219'; g.fillRect(0, 0, w, STRIP.prof);
+    g.beginPath(); g.moveTo(0, STRIP.prof);
+    for (let px = 0; px <= w; px += 1) { const x = Math.floor((px / w) * L * M.U); g.lineTo(px, STRIP.prof - 2 - Math.min(STRIP.prof - 4, (M.groundY(Tn, x) / M.U) * 6)); }
+    g.lineTo(w, STRIP.prof); g.closePath(); g.fillStyle = '#8a6a45'; g.fill();
+    // Lanes (lane 4 at the top).
+    const ly = (l) => STRIP.prof + (3 - l) * STRIP.lane;
+    for (let l = 0; l < 4; l++) { g.fillStyle = l % 2 ? '#5d4730' : '#664e35'; g.fillRect(0, ly(l), w, STRIP.lane); }
+    const zones = Tn.zones.concat(drafts.map(M.pieceZone).map((z) => ({ ...z, draft: true })));
+    for (const z of zones) for (let l = 0; l < 4; l++) {
+      if (!((z.mask >> l) & 1)) continue;
+      const x0 = sx(z.x0 / M.U), x1 = Math.max(x0 + 2, sx(z.x1 / M.U));
+      g.fillStyle = z.seed ? ZONE[z.kind] : z.kind === 'mud' ? PIECE_MUD : ZONE[z.kind];
+      g.fillRect(x0, ly(l) + 1, x1 - x0, STRIP.lane - 2);
+      if (!z.seed) { g.strokeStyle = z.draft ? '#fff' : 'rgba(255,255,255,.5)'; g.lineWidth = z.draft ? 2 : 1; g.strokeRect(x0 + .5, ly(l) + 1.5, x1 - x0 - 1, STRIP.lane - 3); }
+    }
+    // Jumps (lips) and the thirds.
+    // Jumps, in their own lanes (all four, or two): the ramps (no pieces; the ramp's shape drawn in) and the landing
+    // area after them (no hurdles).
+    for (const j of Tn.jumps) for (let l = 0; l < 4; l++) {
+      if (!(((j.mask ?? 15) >> l) & 1)) continue;
+      const e = j.end ?? j.lip;
+      g.fillStyle = 'rgba(255,255,255,.28)'; g.fillRect(sx((j.x0 - 5 * M.U) / M.U), ly(l), Math.max(2, sx((e - j.x0 + 5 * M.U) / M.U)), STRIP.lane);
+      g.fillStyle = 'rgba(255,255,255,.1)'; g.fillRect(sx(e / M.U), ly(l), Math.max(2, sx((j.land - e) / M.U)), STRIP.lane);
+      g.fillStyle = '#c9a774';
+      for (let m = Math.floor(j.x0 / M.U); m < e / M.U; m++) { const hh = M.groundY(Tn, m * M.U, l) / M.U; if (hh > 0) g.fillRect(sx(m), ly(l) + STRIP.lane - 1 - Math.min(STRIP.lane - 2, hh * 4), Math.max(1, sx(1)), Math.min(STRIP.lane - 2, hh * 4)); }
+    }
+    g.strokeStyle = 'rgba(242,193,78,.6)'; g.setLineDash([3, 3]); g.lineWidth = 1;
+    for (const x of Tn.thirds.slice(1, 3)) { const p = sx(x / M.U); g.beginPath(); g.moveTo(p, 0); g.lineTo(p, h); g.stroke(); }
+    g.setLineDash([]);
+    // The AI riders' planned lines (where each would ride if nobody got in the way).
+    const lines = M.aiLines(Tn);
+    lines.forEach((ln, k) => {
+      g.strokeStyle = COLORS[k + 1]; g.globalAlpha = .55; g.lineWidth = 1.5; g.setLineDash([2, 3]); g.beginPath();
+      ln.forEach((l, m) => { const X = sx(m * 5 + 2.5), Y = ly(l) + 3 + k * 3.5; if (m === 0) g.moveTo(X, Y); else g.lineTo(X, Y); });
+      g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+    });
+    // Riders, during and after a race.
+    if (world) world.r.forEach((r, i) => {
+      const lane = r.laneT > 0 ? r.lane + (r.laneTo - r.lane) * (1 - r.laneT / M.LANE_TICKS) : r.lane;
+      g.fillStyle = COLORS[i]; g.beginPath(); g.arc(sx(r.x / M.U), STRIP.prof + (3 - lane) * STRIP.lane + STRIP.lane / 2, i === 0 ? 5 : 3.5, 0, 7); g.fill();
+      if (i === 0) { g.strokeStyle = '#000'; g.lineWidth = 1; g.stroke(); }
+    });
+    // Build hover.
+    if (phase === 'done' && hover) { g.strokeStyle = '#fff'; g.lineWidth = 1; g.strokeRect(sx(hover.m) + .5, ly(hover.lane) + .5, Math.max(3, sx(M.PIECES[pick].len)), STRIP.lane - 1); }
+    $('strip').className = phase === 'done' ? 'build' : '';
+  }
+  const stripAt = (ev) => {
+    const c = $('strip'), r = c.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+    const lane = 3 - Math.floor((y - STRIP.prof) / STRIP.lane);
+    if (lane < 0 || lane > 3) return null;
+    return { m: Math.max(0, Math.floor(((x / r.width) * M.LENGTH_M) / 5) * 5), lane };
+  };
+  $('strip').addEventListener('mousemove', (ev) => { if (phase !== 'done') return; hover = stripAt(ev); drawStrip(); });
+  $('strip').addEventListener('mouseleave', () => { hover = null; if (phase === 'done') drawStrip(); });
+  $('strip').addEventListener('click', (ev) => { if (phase !== 'done' || handing) return; const a = stripAt(ev); if (a) draftAt(a.m, a.lane); });
+
+  // ---------- drawing: the side view ----------
+  const PX = 13; // pixels a metre (16 before the speed-up: the view now shows about as many seconds ahead)
+  function drawView() {
+    const { g, w, h } = fitCanvas($('view'), 320);
+    const Tn = T || base;
+    const me = world ? world.r[0] : M.startWorld(Tn).r[0];
+    const camX = me.x - 12 * M.U;
+    const laneY = (l) => h - 42 - l * 34;
+    const toX = (x) => ((x - camX) / M.U) * PX;
+    const hPx = (y) => (y / M.U) * PX;
+    // Sky.
+    const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#3b5876'); sky.addColorStop(1, '#a98c68');
+    g.fillStyle = sky; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(40,30,20,.35)';
+    for (let k = 0; k < 6; k++) { const bx = ((k * 240 - (camX / M.U) * 4) % (w + 240) + w + 240) % (w + 240) - 120; g.beginPath(); g.ellipse(bx, laneY(3) - 40, 160, 45, 0, Math.PI, 2 * Math.PI); g.fill(); }
+    const riders = world ? world.r.map((r, i) => ({ r, i })) : [];
+    const laneOf = (r) => (r.laneT > 0 ? r.lane + (r.laneTo - r.lane) * (1 - r.laneT / M.LANE_TICKS) : r.lane);
+    // Lanes back to front, each with the riders in it.
+    for (let l = 3; l >= 0; l--) {
+      const y0 = laneY(l);
+      // The ground's surface along the lane, then zone colours on it.
+      g.beginPath(); g.moveTo(0, h);
+      for (let sx = 0; sx <= w + 4; sx += 4) { const x = camX + Math.floor((sx / PX) * M.U); g.lineTo(sx, y0 - hPx(M.groundY(Tn, x, l))); }
+      g.lineTo(w, h); g.closePath();
+      g.fillStyle = l % 2 ? '#7d603f' : '#86684a'; g.fill();
+      for (let sx = 0; sx <= w; sx += 4) {
+        const x = camX + Math.floor(((sx + 2) / PX) * M.U), zs = M.zonesAt(Tn, x, l);
+        const z = zs.find((q) => !q.seed) || zs[0];
+        if (!z || z.kind === 'dust') continue;
+        const top = y0 - hPx(M.groundY(Tn, x, l));
+        if (z.kind === 'hurdle') { g.fillStyle = '#e0705a'; g.fillRect(sx, top - 14, 4, 14); g.fillStyle = '#fff'; g.fillRect(sx, top - 14, 4, 3); continue; }
+        g.fillStyle = z.seed ? ZONE[z.kind] : z.kind === 'mud' ? PIECE_MUD : ZONE[z.kind];
+        g.fillRect(sx, top, 4.5, z.kind === 'whoops' ? 6 : 10);
+        if (z.kind === 'whoops' && sx % 16 === 0) { g.fillStyle = '#6f5436'; g.beginPath(); g.arc(sx + 2, top, 4, Math.PI, 0); g.fill(); }
+        if (z.kind === 'boost' && sx % 12 === 0) { g.fillStyle = '#7a5a10'; g.fillText('›', sx, top + 9); }
+      }
+      // Lane edge.
+      g.strokeStyle = 'rgba(255,255,255,.18)'; g.lineWidth = 1; g.beginPath();
+      for (let sx = 0; sx <= w + 4; sx += 4) { const x = camX + Math.floor((sx / PX) * M.U), y = y0 - hPx(M.groundY(Tn, x, l)); if (sx === 0) g.moveTo(sx, y); else g.lineTo(sx, y); }
+      g.stroke();
+      // Start and finish lines.
+      for (const fx of [0, Tn.length]) { const X = toX(fx); if (X > -10 && X < w + 10) { for (let k = 0; k < 5; k++) { g.fillStyle = k % 2 ? '#111' : '#eee'; g.fillRect(X, y0 - 2 + k * 2, 6, 2); } } }
+      // Riders in this lane (by where they're drawn: mid-change, the nearer lane).
+      for (const { r, i } of riders) if (Math.round(laneOf(r)) === l) drawRider(g, r, i, toX(r.x), laneY(laneOf(r)) - hPx(r.y));
+    }
+    // Dust clouds over everything.
+    for (const z of Tn.zones) if (z.kind === 'dust') { const X0 = toX(z.x0), X1 = toX(z.x1); if (X1 < 0 || X0 > w) continue; g.fillStyle = ZONE.dust; for (let k = 0; k < 6; k++) { g.beginPath(); g.ellipse(X0 + ((X1 - X0) * (k + .5)) / 6, laneY(Math.min(3, (31 - Math.clz32(z.mask)))) - 14 - (k % 2) * 6, 28, 16, 0, 0, 7); g.fill(); } }
+    drawHud(g, w, h);
+  }
+  function drawRider(g, r, i, X, Y) {
+    g.save(); g.translate(X, Y);
+    if (r.down > 0) {
+      g.rotate(.25); g.fillStyle = '#222'; g.fillRect(-14, -6, 28, 5); g.restore();
+      g.fillStyle = COLORS[i]; g.beginPath(); g.arc(X - 18, Y - 4, 4, 0, 7); g.fill();
+      return;
+    }
+    g.rotate(-Math.atan(r.pitch / 1000));
+    g.strokeStyle = '#111'; g.lineWidth = 2.5;
+    g.beginPath(); g.arc(-10, -5, 5, 0, 7); g.stroke(); g.beginPath(); g.arc(10, -5, 5, 0, 7); g.stroke();
+    g.fillStyle = COLORS[i]; g.fillRect(-9, -12, 17, 5);
+    g.strokeStyle = COLORS[i]; g.lineWidth = 3; g.beginPath(); g.moveTo(-2, -12); g.lineTo(0, -21); g.lineTo(6, -17); g.stroke();
+    g.fillStyle = i === 0 ? '#fff' : COLORS[i]; g.beginPath(); g.arc(0, -25, 4, 0, 7); g.fill();
+    if (i === 0) { g.strokeStyle = '#000'; g.lineWidth = 1; g.stroke(); }
+    g.restore();
+  }
+  function drawHud(g, w, h) {
+    g.font = '600 13px system-ui';
+    if (phase === 'countdown') {
+      const n = 3 - Math.floor((performance.now() - countdownAt) / 1000);
+      g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#f2c14e'; g.font = '700 64px Georgia'; g.textAlign = 'center'; g.fillText(n > 0 ? String(n) : 'Go', w / 2, h / 2 + 20); g.textAlign = 'left';
+      return;
+    }
+    if (!world) {
+      g.fillStyle = 'rgba(0,0,0,.4)'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#f2ece2'; g.font = '600 18px Georgia'; g.textAlign = 'center';
+      g.fillText(phase === 'idle' ? 'Enter your name and press Race (or Enter)' : '', w / 2, h / 2); g.textAlign = 'left';
+      return;
+    }
+    const r = world.r[0];
+    // Time, speed, place and lane: top left.
+    g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(8, 8, 250, 26);
+    g.fillStyle = '#f2ece2';
+    g.fillText(`${sec(world.t)} s   ${Math.round((r.v / M.U) * M.TICK * 3.6)} km/h   P${M.placeOf(world, 0)}/5   lane ${r.lane + 1}`, 16, 26);
+    // The heat meter on its own, bottom centre, with marks at 60 % and 85 % (where it turns amber, then red).
+    const k = Math.min(1, r.heat / M.HEAT_MAX), bw = Math.min(320, w - 40), bx = (w - bw) / 2, by = h - 26;
+    g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(bx - 8, by - 18, bw + 16, 38);
+    g.fillStyle = '#333'; g.fillRect(bx, by, bw, 12);
+    g.fillStyle = k < .6 ? '#6fd0c8' : k < .85 ? '#f2c14e' : '#e0705a'; g.fillRect(bx, by, bw * k, 12);
+    g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect(bx + bw * .6, by, 1, 12); g.fillRect(bx + bw * .85, by, 1, 12);
+    g.fillStyle = '#f2ece2'; g.font = '600 11px system-ui'; g.textAlign = 'center';
+    g.fillText(`${r.boost > 0 ? `BOOST ${sec(r.boost)} s · no heat · ` : ''}HEAT ${Math.round(k * 100)} %${k >= .85 ? ' · ease off' : ''}`, w / 2, by - 5); g.textAlign = 'left';
+    if (r.down > 0) { g.font = '700 22px Georgia'; g.fillStyle = '#e0705a'; g.textAlign = 'center'; g.fillText(r.overheats && flash && flash.e.e === 'overheat' ? `Overheated · ${sec(r.down)} s` : `Down · ${sec(r.down)} s`, w / 2, 66); g.textAlign = 'left'; }
+    else if (flash && performance.now() - flash.at < 1200) {
+      const words = { clean: 'Clean landing', rough: 'Rough landing', crash: 'Crash!', overheat: 'Overheated!', hop: 'Hop' };
+      g.font = '700 22px Georgia'; g.fillStyle = flash.e.e === 'clean' || flash.e.e === 'hop' ? '#6fd0c8' : '#e0705a'; g.textAlign = 'center'; g.fillText(words[flash.e.e] || flash.e.e, w / 2, 66); g.textAlign = 'left';
+    }
+    if (phase === 'done') {
+      g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#f2c14e'; g.font = '700 30px Georgia'; g.textAlign = 'center'; g.fillText(`Finished · ${sec(result.time)} s · P${result.place}`, w / 2, h / 2); g.textAlign = 'left';
+    }
+  }
+
+  // ---------- panels ----------
+  function render() {
+    const facing = phase === 'idle' ? chain.pieces : (result ? result.faced : chain.pieces);
+    $('striphead').textContent = phase === 'done' ? 'Build: leave a piece in each third for the next rider' : `Track ${trackNo}${chain.pieces.length ? ` · ${chain.pieces.length} piece${chain.pieces.length > 1 ? 's' : ''} from earlier riders` : ''}`;
+    $('stripkey').innerHTML = phase === 'done'
+      ? 'Click a lane to place the selected piece there (click it again to remove it). Dashed gold lines split the thirds. Pale boxes are jumps: no pieces on the ramps (brighter), no hurdles in the landing area after them (fainter); a landing ramp goes in a landing area.'
+      : `Lane 4 at the top. <span style="color:${ZONE.mud}">■</span> mud <span style="color:${ZONE.cool}">■</span> cool zone <span style="color:${ZONE.whoops}">■</span> whoops <span style="color:${ZONE.grass}">■</span> grass · outlined: riders' pieces · dotted: where each AI rider plans to ride · pale: jump ramps (brighter) and their landing areas.`;
+    // Status.
+    let s = '';
+    if (phase === 'idle' || phase === 'countdown' || phase === 'race') {
+      s = `<h2>Race</h2><div class="big">Track ${trackNo}</div>
+        <div class="muted">${M.LENGTH_M} m, ${base.jumps.length} jumps, four AI riders. You start 2nd on a staggered grid, in lane 2, behind the fastest AI rider. ${facing.length ? `Earlier riders left ${facing.length} piece${facing.length > 1 ? 's' : ''}: ${facing.map((p) => `${M.PIECES[p.kind].label.toLowerCase()} (lane ${p.lane + 1}, ${Math.round(p.x / M.U)} m, by ${esc(p.owner)})`).join(', ')}.` : 'No pieces yet: you\'re the first on this chain.'}</div>${resetNote ? `<div class="muted" style="color:var(--accent);margin-top:4px">${esc(resetNote)}</div>` : ''}
+        <div class="err"></div>`;
+    } else if (phase === 'done' && result) {
+      const par = result.par;
+      s = `<h2>Result</h2><div class="big">${sec(result.time)} s · P${result.place} of 5</div>
+        <div class="muted">${par == null ? 'Par is being worked out…' : `Par ${sec(par)} s: you were ${result.time - par >= 0 ? '+' : '−'}${sec(Math.abs(result.time - par))} s ${result.time >= par ? 'behind' : 'ahead of'} the best line on the track you faced.`}</div>
+        <div class="muted">${result.crashes} crash${result.crashes === 1 ? '' : 'es'}, ${result.overheats} overheat${result.overheats === 1 ? '' : 's'}, ${result.roughs} rough landing${result.roughs === 1 ? '' : 's'}.${result.verified ? ' Replayed from your inputs: same time.' : ' <b>Replay mismatch</b>: the input log gave a different time.'}</div>
+        ${result.credit == null ? (result.faced.some((f) => f.owner !== result.name) ? '<div class="muted">Working out what the earlier pieces did to you…</div>' : '') : result.credit.length ? `<table style="margin-top:6px"><tr><th>Piece</th><th>By</th><th>Cost you</th><th>Saved you</th></tr>${result.credit.map((c) => `<tr><td>${esc(M.PIECES[c.kind].label)}</td><td>${esc(c.owner)}</td><td>${c.harm ? sec(c.harm) + ' s' : '–'}</td><td>${c.aid ? sec(c.aid) + ' s' : '–'}</td></tr>`).join('')}</table>` : ''}`;
+    }
+    $('status').innerHTML = s;
+    // Build.
+    if (phase === 'done' && result) {
+      const cost = drafts.reduce((a, p) => a + M.PIECES[p.kind].cost, 0);
+      const ready = result.par != null && result.credit != null;
+      $('build').style.display = '';
+      $('build').innerHTML = `<h2>Leave pieces</h2>
+        <div class="muted" style="margin-bottom:6px">Up to one in each third. Each costs seconds on your own card. Harms earn you credit only when a later rider loses time to them beyond what the best line loses; boons when they save it.</div>
+        <div style="display:grid;gap:6px">${Object.entries(M.PIECES).map(([k, p]) => `<div class="piece ${k === pick ? 'on' : ''}" data-pick="${k}"><b>${esc(p.label)}</b><span><span class="tag ${p.kind}">${p.kind}</span> +${sec(p.cost)} s</span><small>${esc(p.desc)}</small></div>`).join('')}</div>
+        <div style="margin-top:8px">${['Start', 'Middle', 'Finish'].map((name, k) => { const p = drafts.find((q) => thirdOf(q.x) === k); return `<div class="row" style="justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--line)"><span class="muted">${name} third: ${p ? `<b style="color:var(--text)">${esc(M.PIECES[p.kind].label)}</b>, lane ${p.lane + 1} at ${Math.round(p.x / M.U)} m` : 'nothing'}</span>${p ? `<button data-rm="${esc(p.id)}" ${handing ? 'disabled' : ''}>Remove</button>` : ''}</div>`; }).join('')}
+          ${drafts.length > 1 ? `<div class="row" style="margin-top:6px"><button id="rmall" ${handing ? 'disabled' : ''}>Remove all</button></div>` : ''}</div>
+        <div class="err" style="margin-top:6px">${esc(buildErr)}</div>
+        <div class="row" style="margin-top:6px"><button id="hand" class="on" ${ready && !handing ? '' : 'disabled'}>${handing ? 'Checking the line…' : `${drafts.length ? `Keep ${drafts.length} piece${drafts.length > 1 ? 's' : ''} (+${sec(cost)} s)` : 'Leave nothing'} · hand over`}</button></div>
+        ${ready ? '' : '<div class="muted" style="margin-top:4px">(Waiting for par and credit before handing over.)</div>'}`;
+      for (const el of document.querySelectorAll('[data-pick]')) el.onclick = () => { pick = el.dataset.pick; buildErr = ''; render(); };
+      $('hand').onclick = handOver;
+      for (const el of document.querySelectorAll('[data-rm]')) el.onclick = () => { drafts = drafts.filter((q) => q.id !== el.dataset.rm); buildErr = ''; render(); };
+      if ($('rmall')) $('rmall').onclick = () => { drafts = []; buildErr = ''; render(); };
+    } else $('build').style.display = 'none';
+    // The chain.
+    const rows = chain.riders.map((r) => `<tr><td>${esc(r.name)}</td><td>${sec(r.time)}</td><td>${r.par == null ? '–' : (r.time >= r.par ? '+' : '−') + sec(Math.abs(r.time - r.par))}</td><td>${sec(r.time + r.cost)}</td><td>P${r.place}</td><td>${r.left.length ? r.left.map((k) => esc(M.PIECES[k].label)).join(', ') : '–'}</td></tr>`).join('');
+    const board = Object.entries(chain.credit).filter(([, c]) => c.harm || c.aid).sort((a, b) => b[1].harm + b[1].aid - a[1].harm - a[1].aid);
+    $('chaincard').innerHTML = `<h2>The chain on track ${trackNo}</h2>
+      ${rows ? `<table><tr><th>Rider</th><th>Time</th><th>vs par</th><th>Card</th><th>Place</th><th>Left</th></tr>${rows}</table>` : '<div class="muted">Nobody yet.</div>'}
+      ${board.length ? `<div class="muted" style="margin-top:8px">Credit from pieces: ${board.map(([o, c]) => `${esc(o)} ${c.harm ? `harm ${sec(c.harm)} s` : ''}${c.harm && c.aid ? ', ' : ''}${c.aid ? `aid ${sec(c.aid)} s` : ''}`).join(' · ')}</div>` : ''}
+      <div class="muted" style="margin-top:8px">Pieces last ${LIFETIME} riders. Card = time + seconds paid for pieces left.</div>`;
+    $('go').textContent = phase === 'done' ? 'Back to the start' : 'Race';
+    $('go').disabled = phase === 'race' || phase === 'countdown' || (phase === 'done');
+    drawStrip(); drawView();
+  }
+  window.addEventListener('resize', () => { drawStrip(); drawView(); });
+  window.__moto = { get world() { return world; }, get phase() { return phase; }, get result() { return result; }, get chain() { return chain; }, keys, lane: (d) => { laneReq = d; laneReqTicks = 15; } }; // (for tests)
+  setTrack(1);
+})();
+</script>
+</body>
+</html>

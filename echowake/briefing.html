@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Echowake · Briefing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="console.css">
+<style>
+  .scene-art { background-position: center 30%; }
+  .scene-shade { background: linear-gradient(180deg, rgba(12,11,9,.6) 0%, rgba(12,11,9,.5) 40%, rgba(12,11,9,.92) 100%), radial-gradient(ellipse at 50% 45%, rgba(12,11,9,.35) 30%, rgba(8,7,5,.75) 100%); }
+  /* One screen, no page scroll: the scene is exactly the viewport and the map shrinks to the space left over. */
+  .scene, .scene-body { height: 100vh; height: 100dvh; min-height: 0; }
+  .topbar { padding-top: 14px; padding-bottom: 10px; }
+  .layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 24px; padding: 0 32px; }
+  .side { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+  .side .panel { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .side label { display: flex; flex-direction: column; gap: 5px; font: 12px var(--sans); color: var(--dim); }
+  .tiers, .maps { display: flex; flex-wrap: wrap; gap: 6px; }
+  .mapwrap { position: relative; min-height: 0; display: flex; flex-direction: column; }
+  #map { flex: 1; min-height: 0; }
+  #map .map-svg { width: 100%; height: 100%; }
+  .key .legend { display: flex; flex-direction: column; gap: 6px; font: 11px var(--sans); color: var(--dim); }
+  .key .legend b { display: inline-block; min-width: 34px; }
+  .key .maptoggles { flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+  .key .maptoggles label { flex-direction: row; font-size: 12px; color: rgba(242,237,227,.85); }
+  .legend b { font: 500 11px var(--mono); color: var(--paper); }
+  .hide-switches .legend .sw, .hide-glyphs .legend .gl { display: none; }
+  .bottom { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 12px 32px 18px; background: linear-gradient(transparent, rgba(12,11,9,.94) 40%); }
+  .bottom .story { max-width: 520px; display: flex; flex-direction: column; gap: 8px; }
+  .bottom h1.title { font-size: clamp(30px, 5.2vh, 52px); }
+  .bottom .prose { font-size: 16px; line-height: 1.35; }
+  .strategies { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+  .strategies .btn { flex-direction: row; align-items: center; gap: 8px; backdrop-filter: blur(6px); }
+  .go { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+  .tops { display: flex; flex-direction: column; gap: 6px; font: 12px/1.4 var(--sans); color: var(--dim); }
+  .tops b { color: var(--paper); font-weight: 500; }
+  @media (max-height: 860px) { .side .tops { display: none; } }
+  @media (max-height: 640px) { .bottom .prose { display: none; } }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); gap: 10px; padding: 0 16px; } .side { overflow: visible; } .side .tops, .legend, .bottom .prose, #facts, #periodLabel, #factionNote, #handicapNote, #stratDesc, .go > .label { display: none; } .bottom { padding: 10px 16px 14px; gap: 10px; } .topbar { padding: 10px 16px 6px; gap: 6px; } .side .panel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; } .side .panel.tops, .key > .label, .key .legend { display: none; } .side .panel.key { display: block; padding: 8px 12px; } .key .maptoggles { flex-direction: row; gap: 16px; padding-top: 0; border-top: 0; } .bottom h1.title { font-size: 30px; } .bottom .story { gap: 4px; } .strategies .btn { padding: 6px 8px; font-size: 12px; } .go { gap: 8px; } .go { align-items: stretch; } .strategies { justify-content: flex-start; } }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="scene-art" id="art"></div>
+  <div class="scene-shade"></div>
+  <div class="scene-body">
+    <div class="topbar">
+      <div class="group"><a class="label" href="lobby.html" style="text-decoration:none">← Lobby</a><a href="lobby.html"><img class="logo" src="assets/echowake-logo.png" alt="Echowake"></a><span class="label accent">Briefing</span><span class="label" id="periodLabel"></span><span class="label" id="seedLabel"></span></div>
+      <div class="group" id="facts"></div>
+    </div>
+
+    <div class="layout">
+      <div class="side">
+        <div class="panel">
+          <label>Runner name <input class="field" id="name" maxlength="24" autocomplete="nickname"></label>
+          <label>Faction <select class="field" id="faction"></select></label>
+          <div class="muted" id="factionNote" style="font:12px/1.4 var(--sans)"></div>
+          <div class="muted" id="handicapNote" style="font:12px/1.4 var(--sans)"></div>
+        </div>
+        <div class="panel key">
+          <span class="label">Map key</span>
+          <div class="legend">
+            <span><b>◆n</b> loot</span><span class="sw"><b>⚙S1</b> switch</span><span class="gl"><b>□△</b> carved marks over rooms</span><span class="sw"><b>⚙□</b> marks on switches and the door</span><span><b style="color:var(--teal)">⋯</b> your planned route</span><span class="sw"><b>- - -</b> wire from a switch to its trap</span><span><b style="color:var(--red)">|</b> the exit door</span>
+          </div>
+          <div class="maptoggles" id="layers"></div>
+        </div>
+        <div class="panel tops" id="tops"></div>
+      </div>
+      <div class="mapwrap">
+        <div id="map"></div>
+        <div class="sweep" style="left:0"></div>
+      </div>
+    </div>
+
+    <div class="bottom">
+      <div class="story">
+        <div class="label accent" id="kicker"></div>
+        <h1 class="title" id="mapTitle"></h1>
+        <p class="prose" id="mapBlurb"></p>
+      </div>
+      <div class="go">
+        <span class="label">Suggested strategy</span>
+        <div class="strategies" id="strategies"></div>
+        <div class="muted" id="stratDesc" style="font:12px var(--sans);text-align:right"></div>
+        <button class="btn primary big" id="enter">Enter →</button>
+        <div class="err" id="err"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="echowake-api.js"></script>
+<script src="sim.js"></script>
+<script src="console.js"></script>
+<script>
+(() => {
+  const { Sim, esc, $, store, api, loadSeed, fac, ART, STRATEGIES, mapSVG, layerToggles, plan, startView } = Console;
+  layerToggles($('layers'), document.querySelector('.layout'));
+  for (const b of document.querySelectorAll('.key .legend b')) b.innerHTML = Console.glyphify(b.textContent);
+  const params = new URLSearchParams(location.search);
+  const invite = params.get('chain');
+  // The lobby sends ?map=&tier= (today's seed) or ?seed= (practice on a closed seed); an invite sends ?chain=.
+  const askedSeed = params.get('seed') ? Sim.parseSeedId(params.get('seed')) : null;
+
+  let ix = null;
+  let mapId = askedSeed ? askedSeed.mapId : params.get('map') || store.get('trap-relay-map') || null;
+  let tier = askedSeed ? askedSeed.tier : Number(params.get('tier') || store.get('trap-relay-tier')) || 1;
+  let strategy = store.get('trap-relay-strategy') || 'direct';
+  let inviteChain = null;
+
+  $('faction').innerHTML = Object.entries(Sim.FACTIONS).map(([k, f]) => `<option value="${k}">${esc(f.label)}</option>`).join('');
+  $('name').value = store.get('trap-relay-name') || '';
+  $('faction').value = store.get('trap-relay-faction') || 'wardens';
+
+  const me = () => ($('name').value || '').trim().toLowerCase();
+  const live = () => Object.entries(Sim.MAPS).filter(([, m]) => m.status === 'live');
+
+  // The seed this lobby would claim: the invited chain's seed, or the chosen map's current seed on this tier.
+  function currentSeed() {
+    if (inviteChain) return inviteChain.seed;
+    if (askedSeed) return params.get('seed');
+    const ns = ix && ix.nextSeed[mapId] && ix.nextSeed[mapId][tier];
+    return ns ? ns.current : Sim.seedIdOf(mapId, tier, 1);
+  }
+
+  async function load() {
+    try { ix = await api(`api/index?runner=${encodeURIComponent(me())}`); } catch (e) { $('err').textContent = `${e.message}. Is the page served by serve.js?`; }
+    if (invite && !inviteChain) {
+      try { inviteChain = await api(`api/chain/${encodeURIComponent(invite)}`); } catch (e) { $('err').textContent = e.message; }
+    }
+    try { await loadSeed(currentSeed()); } catch (e) { $('err').textContent = e.message; return; }
+    render();
+  }
+
+  function render() {
+    if (!ix && !inviteChain && !params.get('seed')) return;
+    if (!mapId || !Sim.MAPS[mapId] || Sim.MAPS[mapId].status !== 'live') mapId = live()[0][0];
+    if (inviteChain) { const p = Sim.parseSeedId(inviteChain.seed); mapId = p.mapId; tier = p.tier; }
+    const seedId = currentSeed();
+    let seed;
+    try { seed = Sim.getSeed(seedId); } catch (e) { return; } // not loaded yet: load() draws it when it arrives
+    const map = Sim.MAPS[mapId];
+    $('art').style.backgroundImage = `url(${ART(mapId, 'gate')})`;
+
+    $('periodLabel').textContent = ix ? `Period ${ix.period}` : '';
+    $('seedLabel').textContent = `${seed.map.name.toUpperCase()} · SEED ${seedId.split('#')[1]}`;
+    $('facts').innerHTML = [`${seed.turnCap} turns`, `${seed.supplies} supplies`, `${Object.keys(seed.rooms).length} rooms`, Sim.TIERS[tier].label]
+      .map((x) => `<span class="chip">${esc(x.toUpperCase())}</span>`).join('');
+
+    // The chosen strategy's route, drawn as a flowing dashed line from the start to the exit.
+    $('map').innerHTML = mapSVG(seed, null, { route: plan(seed, startView(seed), strategy) });
+    $('kicker').textContent = inviteChain ? `Invited to a chain · ${inviteChain.saves} run${inviteChain.saves === 1 ? '' : 's'} saved on it` : `${map.year} · ${map.shape}`;
+    $('mapTitle').innerHTML = `${esc(map.name.replace(/^The /, ''))} <em>${esc(map.year)}</em>`;
+    $('mapBlurb').textContent = `${map.blurb} ${Sim.TIERS[tier].desc}`;
+
+    $('strategies').innerHTML = STRATEGIES.map((s) => `<button class="btn small ${s.id === strategy ? 'on' : ''}" data-strat="${s.id}"><svg width="16" height="16" viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${s.icon}"/></svg>${esc(s.title)}</button>`).join('');
+    for (const b of $('strategies').querySelectorAll('[data-strat]')) b.onclick = () => { strategy = b.dataset.strat; store.set('trap-relay-strategy', strategy); render(); };
+    $('stratDesc').textContent = STRATEGIES.find((s) => s.id === strategy).desc;
+
+    // What pressing Enter will do: resume, start, practice, or nothing (already played a live seed).
+    const mine = (ix && ix.me) || { open: [], played: [], lock: null };
+    const resume = mine.open.find((o) => o.seed === seedId);
+    const played = mine.played.includes(seedId);
+    const closed = ix && ix.closedSeeds.includes(seedId);
+    const enter = $('enter');
+    enter.disabled = !me() || (played && !closed && !resume);
+    enter.textContent = !me() ? 'Enter a runner name' : resume ? 'Resume your run →' : played && !closed ? 'Played: back after the reset' : closed ? 'Practice this seed →' : inviteChain ? 'Join the chain →' : `Enter seed ${seedId.split('#')[1]} →`;
+
+    const lock = mine.lock;
+    $('faction').disabled = !!lock;
+    if (lock) $('faction').value = lock.faction;
+    $('factionNote').innerHTML = lock ? `Locked to ${fac(lock.faction)} for ${esc(lock.period)}. You can switch next period.` : `"${esc(Sim.FACTIONS[$('faction').value].motto)}" Your faction locks when you finish your first run this period.`;
+    const hc = ix && ix.handicaps[me()];
+    $('handicapNote').textContent = !me() ? '' : hc && hc.value !== null ? `Handicap ${hc.value} (0 is perfect play)` : `Handicap after ${ix ? ix.handicapMin : 3} ranked runs (you have ${hc ? hc.runs : 0}).`;
+
+    const t = ix && ix.tiers[tier];
+    $('tops').innerHTML = t ? [
+      `<span class="label">This period · ${esc(Sim.TIERS[tier].label)}</span>`,
+      `<span>Leader: ${t.leader ? `<b>${t.leaders.map((l) => esc(l.runner)).join(', ')}</b> · ${t.leader.score}` : '<span class="muted">nobody yet</span>'}</span>`,
+      `<span>Top saboteur: ${t.topSaboteur ? `<b>${t.topSaboteurs.map((d) => esc(d.name)).join(', ')}</b> · ${t.topSaboteur.saboteur}` : '<span class="muted">nobody yet</span>'}</span>`,
+      `<span>Top benefactor: ${t.topBenefactor ? `<b>${t.topBenefactors.map((d) => esc(d.name)).join(', ')}</b> · ${t.topBenefactor.benefactor}` : '<span class="muted">nobody yet</span>'}</span>`,
+      `<span style="font-size:12px"><a href="leaderboard.html">Leaderboards</a> · <a href="play.html">Classic view</a></span>`,
+    ].join('') : '';
+  }
+
+  let timer = null;
+  $('name').oninput = () => { store.set('trap-relay-name', me()); clearTimeout(timer); timer = setTimeout(load, 300); render(); };
+  $('faction').oninput = () => { store.set('trap-relay-faction', $('faction').value); render(); };
+
+  $('enter').onclick = async () => {
+    $('err').textContent = '';
+    $('enter').disabled = true;
+    try {
+      const out = await api('api/claim', { seed: currentSeed(), runner: me(), faction: $('faction').value, chain: inviteChain ? inviteChain.id : undefined, channel: 'web' });
+      store.set(`trap-relay-strategy:${out.run}`, strategy);
+      location.href = out.result ? `result.html?run=${out.run}` : `run.html?run=${out.run}`;
+    } catch (e) { $('err').textContent = e.message; $('enter').disabled = false; }
+  };
+
+  load();
+})();
+</script>
+</body>
+</html>

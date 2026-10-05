@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Relay Golf</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Stage 2: home, round result, chain and boards, how to play. Tokens from the Claude Design style guide (design/golf/). */
+  :root {
+    --marigold: #F2B52E; --ink: #1E2A24; --paper: #F7F4EC; --sheet: #FFFFFF;
+    --harm: #E8604C; --boon: #4C9BE8; --bluff: #A66BD9; --either: #6F7F8C; --good: #3FBF6F;
+    --muted: #6B7A72; --line: #E7E2D6;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; min-height: 100%; background: #ECE8DF; font: 600 15px/1.4 Nunito, system-ui, sans-serif; color: var(--ink); }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 0; background: none; }
+  #phone { position: relative; width: 100%; max-width: 430px; min-height: 100dvh; margin: 0 auto; background: var(--paper); padding: max(18px, env(safe-area-inset-top)) 18px max(24px, env(safe-area-inset-bottom)); }
+  @media (min-width: 600px) { #phone { margin-top: 2vh; min-height: 96dvh; border-radius: 36px; box-shadow: 0 20px 60px rgba(0,0,0,.18); } }
+  .title { font: 800 34px/1.05 'Baloo 2', sans-serif; margin: 0; }
+  .h2 { font: 800 20px/1.15 'Baloo 2', sans-serif; margin: 0; }
+  .label { font: 800 12px/1.2 Nunito, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .muted { color: var(--muted); font-size: 14px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .between { justify-content: space-between; }
+  .card { background: #fff; border-radius: 22px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.05); margin-top: 14px; }
+  .chip { display: inline-block; background: var(--ink); color: #fff; border-radius: 999px; padding: 4px 10px; font: 800 12px Nunito; white-space: nowrap; }
+  .chip.light { background: #EFEBE2; color: var(--ink); }
+  .primary { display: block; width: 100%; height: 56px; border-radius: 999px; background: var(--marigold); font: 800 20px 'Baloo 2'; margin-top: 14px; box-shadow: 0 4px 0 #d79a14; text-align: center; line-height: 56px; text-decoration: none; color: var(--ink); }
+  .secondary { display: block; width: 100%; height: 52px; border-radius: 999px; background: #EFEBE2; font: 800 15px Nunito; margin-top: 10px; text-align: center; line-height: 52px; text-decoration: none; color: var(--ink); }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--ink); color: var(--marigold); font: 800 16px/40px 'Baloo 2'; text-align: center; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid2 .card { margin-top: 12px; }
+  .thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+  .thumbs canvas { width: 100%; height: 96px; border-radius: 14px; display: block; background: #4F9A4B; }
+  .thumbs .muted { text-align: center; font-size: 12px; margin-top: 4px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--good); margin-right: 6px; }
+  .tag-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { padding: 9px 4px; border-bottom: 1px solid var(--line); text-align: left; }
+  th { font: 800 11px Nunito; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  td.num, th.num { text-align: right; }
+  .big { font: 800 56px/1 'Baloo 2'; }
+  .tiles3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+  .tile { border-radius: 18px; padding: 12px 10px; }
+  .tile .v { font: 800 20px/1.1 'Baloo 2'; margin-top: 4px; }
+  .tabs { display: flex; background: #EFEBE2; border-radius: 999px; padding: 4px; margin-top: 14px; }
+  .tabs button { flex: 1; border-radius: 999px; padding: 8px; font: 800 13px Nunito; }
+  .tabs button.on { background: var(--ink); color: #fff; }
+  .lesson { display: grid; grid-template-columns: 92px 1fr; gap: 14px; align-items: center; }
+  .lesson svg { width: 92px; height: 92px; border-radius: 18px; }
+  input.name { width: 100%; height: 48px; border-radius: 14px; border: 1.5px solid var(--line); padding: 0 14px; font: 700 16px Nunito; background: #fff; margin-top: 8px; }
+  .dev { margin-top: 18px; font-size: 12px; color: #b07a00; border: 1px dashed #d9a23a; border-radius: 12px; padding: 8px 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .dev button { border: 1px solid #d9a23a; border-radius: 8px; padding: 3px 8px; font-size: 12px; }
+  a.back { color: var(--ink); text-decoration: none; font: 800 14px Nunito; }
+</style>
+</head>
+<body>
+<div id="phone"></div>
+<script src="golf-sim.js"></script>
+<script src="chain.js"></script>
+<script src="screens.js"></script>
+</body>
+</html>

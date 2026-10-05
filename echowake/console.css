@@ -1,0 +1,149 @@
+/* Console theme for the lobby, run and result pages: a dark, instrument-driven HUD over full-bleed illustration
+   (after the "Time Travel Game Mockups" turn 2). Type: Cormorant Garamond for titles and narrative, IBM Plex Sans
+   for interface, IBM Plex Mono for readouts. One teal accent; amber for danger and designers who trap. */
+:root {
+  --ink: #0c0b09;
+  --paper: #f2ede3;
+  --paper-bright: #f7f2e8;
+  --dim: rgba(242, 237, 227, .7);
+  --faint: rgba(242, 237, 227, .5);
+  --line: rgba(255, 255, 255, .18);
+  --line-soft: rgba(255, 255, 255, .12);
+  --panel: rgba(12, 11, 9, .74);
+  --teal: oklch(80% .12 200);
+  --teal-bright: oklch(88% .1 200);
+  --teal-glow: oklch(80% .12 200 / .35);
+  --amber: oklch(78% .14 55);
+  --amber-glow: oklch(78% .14 55 / .4);
+  --red: oklch(65% .18 25);
+  --wardens: oklch(78% .1 240);
+  --unravelers: oklch(76% .15 50);
+  --mirrors: oklch(80% .1 300);
+  --serif: 'Cormorant Garamond', Georgia, serif;
+  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: var(--ink); color: var(--paper); font-family: var(--sans); }
+body { overflow-x: hidden; }
+a { color: var(--teal); }
+button { font-family: var(--sans); }
+.hide { display: none !important; }
+
+/* Scenes: a full-bleed illustration under a darkening gradient, with the HUD on top. */
+.scene { position: relative; min-height: 100vh; overflow: hidden; }
+.scene-art { position: absolute; inset: 0; background-size: cover; background-repeat: no-repeat; }
+.scene-shade { position: absolute; inset: 0; }
+.scene-body { position: relative; min-height: 100vh; display: flex; flex-direction: column; }
+
+/* HUD bits */
+.mono { font-family: var(--mono); }
+.label { font: 500 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+.accent { color: var(--teal); }
+.chip { padding: 6px 10px; background: rgba(0, 0, 0, .5); border: 1px solid var(--line); border-radius: 3px; font: 500 11px var(--mono); letter-spacing: .12em; white-space: nowrap; }
+.chip.accent { color: var(--teal); }
+.chip.warn { color: var(--amber); border-color: var(--amber-glow); }
+.topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 20px 32px; }
+.logo { height: 30px; width: auto; display: block; flex: none; margin: -6px 0; }
+.topbar .group { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.panel { background: var(--panel); border: 1px solid var(--line-soft); border-radius: 4px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+h1.title { margin: 0; font: 400 clamp(36px, 6vw, 56px)/.95 var(--serif); letter-spacing: -.01em; color: var(--paper-bright); }
+h2.title { margin: 0; font: 400 clamp(32px, 5vw, 48px)/.95 var(--serif); color: var(--paper-bright); }
+.prose { margin: 0; font: 400 17px/1.45 var(--serif); color: rgba(242, 237, 227, .82); text-wrap: pretty; }
+.muted { color: var(--faint); }
+.err { color: var(--red); font: 13px var(--sans); min-height: 1em; }
+
+/* Buttons */
+.btn { text-decoration: none; padding: 11px 14px; background: rgba(255, 255, 255, .05); color: var(--paper); border: 1px solid var(--line); border-radius: 3px; font: 500 13px var(--sans); cursor: pointer; text-align: left; display: inline-flex; flex-direction: column; gap: 3px; }
+.btn:hover:not(:disabled) { border-color: var(--teal); background: rgba(255, 255, 255, .09); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn .cost { font: 500 10px var(--mono); letter-spacing: .06em; opacity: .65; }
+.btn.warn:hover:not(:disabled) { border-color: var(--amber); }
+.btn.warn .cost { color: var(--amber); opacity: 1; }
+.btn.primary { background: var(--teal); color: var(--ink); border: 0; font-weight: 600; box-shadow: 0 0 24px var(--teal-glow); }
+.btn.primary:hover:not(:disabled) { background: var(--teal-bright); }
+.btn.big { padding: 15px 26px; font: 600 14px var(--sans); letter-spacing: .04em; text-align: center; }
+.btn.small { padding: 7px 10px; font-size: 12px; }
+.btn.on { border-color: var(--teal); background: rgba(255, 255, 255, .1); color: var(--teal); }
+input.field, select.field { background: rgba(0, 0, 0, .55); color: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 9px 10px; font: 14px var(--sans); }
+input.field:focus, select.field:focus { outline: none; border-color: var(--teal); }
+
+/* The projected map: rooms as rings, links as hairlines, marks as boxed glyphs. */
+.map-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.map-svg .link { stroke: rgba(242, 237, 227, .3); stroke-width: 1.2; }
+.map-svg .door-closed { stroke: var(--red); stroke-width: 3; }
+.map-svg .door-open { stroke: var(--teal); stroke-width: 2; stroke-dasharray: 3 3; }
+.map-svg .room { cursor: pointer; }
+.map-svg .room circle.node { fill: var(--ink); stroke: rgba(242, 237, 227, .6); stroke-width: 1.5; }
+.map-svg .room.seen circle.node { stroke: rgba(242, 237, 227, .85); }
+.map-svg .room.here circle.node { fill: var(--teal); stroke: transparent; filter: drop-shadow(0 0 10px var(--teal)); }
+.map-svg .room.exit circle.node { fill: var(--paper); stroke: transparent; }
+.map-svg .room.sel circle.node { stroke: var(--teal); stroke-width: 2.5; }
+.map-svg .room text.id { font: 600 13px var(--mono); fill: var(--paper); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.map-svg .room.here text.id, .map-svg .room.exit text.id { fill: var(--ink); }
+.map-svg .room text.name { font: 11px var(--sans); fill: rgba(242, 237, 227, .85); text-anchor: middle; paint-order: stroke; stroke: rgba(0, 0, 0, .7); stroke-width: 3px; pointer-events: none; }
+.map-svg .room text.tag { font: 500 10px var(--mono); fill: var(--teal); text-anchor: middle; paint-order: stroke; stroke: rgba(0, 0, 0, .7); stroke-width: 3px; pointer-events: none; }
+/* The suggested next room: a turning dashed ring. */
+.map-svg .nextring { fill: none; stroke: var(--teal); stroke-width: 2; stroke-dasharray: 5 4; transform-box: fill-box; transform-origin: center; animation: tt-spin 6s linear infinite; filter: drop-shadow(0 0 4px var(--teal-glow)); pointer-events: none; }
+.map-svg .pulse { fill: none; stroke: var(--teal); stroke-width: 1.5; transform-box: fill-box; transform-origin: center; animation: tt-pulse 2.2s ease-out infinite; pointer-events: none; }
+.map-svg .mark rect { fill: rgba(12, 11, 9, .92); stroke: rgba(242, 237, 227, .7); stroke-width: 1.3; }
+.map-svg .mark text { font: 13px var(--sans); fill: var(--paper); dominant-baseline: central; }
+.map-svg .mark.la rect { stroke: var(--teal); } .map-svg .mark.lb rect { stroke: var(--amber); } .map-svg .mark.lc rect { stroke: var(--mirrors); }
+.map-svg .mark .faded { opacity: .3; text-decoration: line-through; }
+/* The Astral glyphs (console.js GLYPH_PATHS): stroked in the current text colour. */
+.glyph { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
+.glyph .f { fill: currentColor; stroke: none; }
+.glyph-i { display: inline-block; width: 1.1em; height: 1.1em; vertical-align: -.2em; margin: 0 .05em; }
+.map-svg .mark .glyph { color: var(--paper); }
+.map-svg .mark .glyph.faded { opacity: .3; }
+.map-svg .mark .strike { stroke: var(--paper); stroke-width: 1.2; opacity: .55; }
+.map-svg .scratch .glyph { color: var(--amber); }
+.map-svg .mark.gone rect { stroke-dasharray: 2 3; opacity: .55; }
+.map-svg .scratch rect { fill: rgba(12, 11, 9, .9); stroke: var(--amber); stroke-dasharray: 3 2; stroke-width: 1.3; }
+.map-svg .scratch text { font: italic 12px var(--sans); fill: var(--amber); dominant-baseline: central; }
+.map-svg .wire { fill: none; stroke-width: 2; stroke-dasharray: 6 6; animation: tt-dash 1.6s linear infinite; }
+.map-svg .wire.la { stroke: var(--teal); filter: drop-shadow(0 0 5px var(--teal)); } .map-svg .wire.lb { stroke: var(--amber); } .map-svg .wire.lc { stroke: var(--mirrors); }
+.map-svg .wire.done { stroke-dasharray: none; animation: none; }
+/* The planned route: a dashed line that flows toward the exit. */
+.map-svg .route { fill: none; stroke: var(--teal); stroke-width: 3; stroke-opacity: .85; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 8 7; animation: tt-dash 1.1s linear infinite; filter: drop-shadow(0 0 4px var(--teal-glow)); }
+.map-svg .intel { font: 600 11px var(--mono); text-anchor: middle; paint-order: stroke; stroke: rgba(0, 0, 0, .8); stroke-width: 3px; }
+.map-svg .intel.empty { fill: var(--teal); } .map-svg .intel.something { fill: var(--amber); } .map-svg .intel.mine { fill: var(--paper); }
+/* Map layers the runner can hide: switches (switch tags, switch and door marks, and the wires from them) and glyphs
+   (the carved marks over rooms and scratched runner marks). */
+.hide-switches .map-svg .sw, .hide-switches .map-svg .wire, .hide-switches .map-svg .mark.swmark, .hide-switches .map-svg .mark.door { display: none; }
+.hide-glyphs .map-svg .mark:not(.swmark):not(.door), .hide-glyphs .map-svg .scratch { display: none; }
+.maptoggles { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.maptoggles label { display: flex; align-items: center; gap: 8px; cursor: pointer; font: 11px var(--sans); color: rgba(242,237,227,.8); white-space: nowrap; }
+.maptoggles input { appearance: none; -webkit-appearance: none; width: 14px; height: 14px; margin: 0; border: 1px solid rgba(255,255,255,.4); border-radius: 2px; background: transparent; cursor: pointer; }
+.maptoggles input:checked { background: var(--teal); border-color: var(--teal); box-shadow: 0 0 8px var(--teal-glow); }
+.maptoggles input:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.sweep { position: absolute; top: 0; bottom: 0; width: 70px; background: linear-gradient(90deg, transparent, oklch(80% .12 200 / .12), transparent); animation: tt-sweep 6s linear infinite; pointer-events: none; mix-blend-mode: screen; }
+
+/* Factions */
+.fac { font-weight: 600; white-space: nowrap; }
+.facicon { display: inline-block; vertical-align: -.22em; margin-right: 4px; object-fit: contain; } .fac.wardens { color: var(--wardens); } .fac.unravelers { color: var(--unravelers); } .fac.mirrors { color: var(--mirrors); }
+
+/* Boards */
+.board-row { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: baseline; padding: 6px 8px; margin: 0 -8px; border-radius: 3px; font: 13px var(--sans); }
+.board-row .rank, .board-row .pts { font: 500 11px var(--mono); }
+.board-row.you { background: var(--teal); color: var(--ink); font-weight: 600; }
+.board-row.you.amber { background: var(--amber); }
+
+/* Log */
+.log { max-height: 220px; overflow: auto; font: 12px/1.5 var(--mono); color: var(--dim); }
+.log div { padding: 1px 0; }
+.log .spring { color: var(--amber); }
+.log .hint { color: var(--teal); }
+
+@keyframes tt-pulse { 0% { transform: scale(1); opacity: .9 } 100% { transform: scale(3.2); opacity: 0 } }
+@keyframes tt-sweep { 0% { transform: translateX(-10%) } 100% { transform: translateX(1100%) } }
+@keyframes tt-dash { to { stroke-dashoffset: -40 } }
+@keyframes tt-spin { to { transform: rotate(360deg) } }
+@keyframes tt-rise { 0% { opacity: 0; transform: translateY(14px) } 100% { opacity: 1; transform: translateY(0) } }
+@keyframes tt-flicker { 0%, 100% { opacity: 1 } 50% { opacity: .55 } }
+@keyframes tt-drift { 0% { transform: translateY(0) } 100% { transform: translateY(-120px) } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+@media (max-width: 720px) {
+  .topbar { padding: 14px 16px; }
+}

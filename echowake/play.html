@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trap Relay Prototype</title>
+<style>
+  :root {
+    --bg: #f5f3ee; --panel: #ffffff; --ink: #1d1c1a; --muted: #6b675f; --line: #d9d4c9;
+    --accent: #2f5fb3; --good: #2f7a4d; --bad: #b3261e; --here: #dde7fa; --seen: #eef1f6;
+    --btn: #efece5; --warn-bg: #fff4d6; --warn-ink: #7a5500;
+    --wardens: #2f6fb3; --unravelers: #c2571f; --mirrors: #7a4fb3;
+    --link-a: #d9822b; --link-b: #2f9a6a; --link-c: #b0479a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15161b; --panel: #1f2027; --ink: #eae8e3; --muted: #a09c94; --line: #383a44;
+      --accent: #7ea6f0; --good: #6cc38f; --bad: #f07c72; --here: #26324a; --seen: #22262f;
+      --btn: #2a2c35; --warn-bg: #3a3218; --warn-ink: #f0d27a;
+      --wardens: #7fb0ec; --unravelers: #f09a62; --mirrors: #b597f0;
+      --link-a: #f0a050; --link-b: #5cc896; --link-c: #e07ccb;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 17px; margin: 0; }
+  .stats { display: flex; gap: 16px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+  .stats b { font-size: 16px; }
+  main { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr); gap: 16px; padding: 16px; max-width: 1200px; margin: 0 auto; }
+  @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+  .col { display: flex; flex-direction: column; gap: 12px; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { fill: var(--ink); font-family: system-ui, sans-serif; }
+  .room rect { fill: var(--panel); stroke: var(--line); stroke-width: 2; cursor: pointer; }
+  .room.seen rect { fill: var(--seen); }
+  .room.here rect { fill: var(--here); stroke: var(--accent); }
+  .room.sel rect { stroke: var(--ink); stroke-dasharray: 5 3; }
+  .room .lbl { fill: var(--muted); }
+  .edge { stroke: var(--line); stroke-width: 4; }
+  .door-closed { stroke: var(--bad); stroke-width: 8; }
+  .door-open { stroke: var(--good); stroke-width: 3; stroke-dasharray: 4 4; }
+  button { font: inherit; background: var(--btn); color: var(--ink); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  select { max-width: 100%; }
+  select, input, textarea { font: inherit; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+  .muted { color: var(--muted); }
+  .err { color: var(--bad); min-height: 1.4em; }
+  .banner { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 8px 12px; margin: 0 16px; max-width: 1168px; }
+  .log { font: 12.5px/1.5 ui-monospace, Consolas, monospace; max-height: 240px; overflow: auto; white-space: pre-wrap; }
+  .log .hidden { color: var(--muted); }
+  .log .spring { color: var(--bad); font-weight: 600; }
+  .log .now { background: var(--here); }
+  .log .hint { color: var(--accent); }
+  details.card > summary { cursor: pointer; list-style-position: outside; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-start; justify-content: center; padding: 32px 16px; overflow: auto; }
+  .overlay > .card { max-width: 760px; width: 100%; }
+  textarea { width: 100%; min-height: 150px; font: 12px ui-monospace, Consolas, monospace; }
+  .score { font-size: 28px; font-weight: 700; }
+  .hide { display: none !important; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+  table.board { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  table.board td, table.board th { padding: 3px 12px 3px 0; text-align: left; }
+  table.board th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .maps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .mapcard { border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .mapcard h3 { margin: 0; font-size: 15px; }
+  .mapcard .shape { font-size: 12px; color: var(--muted); }
+  .tops { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 4px 0 8px; }
+  .mark, .wire, .wirelbl, .doorlink { pointer-events: none; }
+  .doorlink { stroke: var(--bad); stroke-width: 2; stroke-dasharray: 3 3; }
+  .doorlink.open { stroke: var(--good); }
+  .wire { fill: none; stroke-width: 3; stroke-dasharray: 7 6; opacity: .85; }
+  .wire.done { stroke-dasharray: none; stroke-width: 3.5; }
+  .wire.la { stroke: var(--link-a); } .wire.lb { stroke: var(--link-b); } .wire.lc { stroke: var(--link-c); }
+  .wirelbl { font-size: 13px; font-weight: 700; fill: var(--muted) !important; }
+  .mark rect { fill: var(--panel); stroke: var(--muted); stroke-width: 1.5; }
+  .mark.la rect { stroke: var(--link-a); stroke-width: 3; } .mark.lb rect { stroke: var(--link-b); stroke-width: 3; } .mark.lc rect { stroke: var(--link-c); stroke-width: 3; }
+  .mark text { font-size: 19px; }
+  .mark .faded { opacity: .28; text-decoration: line-through; }
+  .mark.gone rect { stroke-dasharray: 2 3; opacity: .5; }
+  /* Runner marks are scratched, not carved: dashed, slanted and in their own colour, so they never pass for seed marks. */
+  .scratch { pointer-events: none; }
+  .scratch rect { fill: var(--panel); stroke: var(--warn-ink); stroke-width: 1.5; stroke-dasharray: 3 2; }
+  .scratch text { font-size: 14px; font-style: italic; fill: var(--warn-ink) !important; }
+  .scratch.mine rect { stroke-width: 2.5; }
+  .decoder { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; margin-top: 6px; }
+  .decoder .g { font-size: 18px; text-align: center; min-width: 26px; }
+  .decoder select { font-size: 12.5px; }
+  .tierpick { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  .tierpick button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .fac { font-weight: 600; }
+  .fac.wardens { color: var(--wardens); } .fac.unravelers { color: var(--unravelers); } .fac.mirrors { color: var(--mirrors); }
+  details summary { cursor: pointer; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Trap Relay · <span id="seedName">–</span></h1>
+  <div class="stats">
+    <span>Runner <b id="sRunner">–</b></span>
+    <span>Room <b id="sRoom">–</b></span>
+    <span>Turn <b id="sTurn">0</b>/<span id="sCap"></span></span>
+    <span>HP <b id="sHp">10</b></span>
+    <span>Supplies <b id="sSup">8</b></span>
+    <span>Loot <b id="sLoot">0</b></span>
+  </div>
+</header>
+<div id="practice" class="banner hide"></div>
+
+<main>
+  <div class="col">
+    <div class="card"><svg id="map" viewBox="0 -20 790 360" aria-label="Map of the seed"></svg>
+      <div class="muted">Click a room to select it. ◆ loot · ⚙ switch (↓ flipped; 🚪 opens the exit door, +3 releases a cache, ∅ nothing) · boxed glyphs are marks (switch mark top left, trap mark top right; a coloured wire joins a switch to its trap, dashed until you flip it) · ? peeked "something" · ⏱ it will change · ✓ peeked empty · ! inspected · ★ your trap</div>
+    </div>
+    <div class="card"><h2>Log</h2><div id="log" class="log"></div></div>
+  </div>
+
+  <div class="col">
+    <details class="card" id="decoderCard">
+      <summary><h2 style="display:inline">Glyph decoder</h2> <span class="muted">· optional, for an edge</span></summary>
+      <details class="muted" style="margin-top:6px"><summary>How marks work</summary><div id="grammar" style="margin-top:4px"></div></details>
+      <div class="decoder" id="decoder"></div>
+    </details>
+
+    <div class="card">
+      <h2>Selected: <span id="selName">–</span></h2>
+      <div id="selInfo" class="muted"></div>
+      <div class="row" id="selActions">
+        <button id="bMove">Move (1 turn)</button>
+        <button id="bPeek">Peek (1)</button>
+        <button id="bInspect">Inspect (3)</button>
+      </div>
+    </div>
+
+    <div class="card" id="hereCard">
+      <h2>This room</h2>
+      <div id="hereInfo" class="muted"></div>
+      <div class="row">
+        <button id="bFlip">Flip switch (1 turn)</button>
+        <button id="bInspectSwitch">Inspect switch (2)</button>
+        <button id="bWait">Wait (1 turn)</button>
+      </div>
+      <div class="row" id="scratchRow">
+        Scratch a mark here: <select id="xTarget"></select> <select id="xGlyph"></select>
+        <button id="bScratch"></button>
+      </div>
+    </div>
+
+    <div class="card" id="trapCard">
+      <div id="dropSection">
+        <h2>Leave a trap for the next runner</h2>
+        <div class="row">
+          <select id="dKind"></select>
+          <select id="dArmed"></select>
+        </div>
+        <div class="row" id="dTimedRow">
+          <label><input type="checkbox" id="dTimed"> Timed: becomes <b id="dThenLabel"></b> on the next runner's turn</label>
+          <input id="dAt" type="number" min="1" max="8" value="6" style="width:60px">
+        </div>
+        <div class="row" id="dWireRow">
+          Woken by <select id="dWireSw"></select>
+          <select id="dWireEff"><option>arm</option><option>invert</option></select>
+        </div>
+        <div class="row"><button id="bDrop" class="primary">Drop here</button><span id="dCost" class="muted"></span></div>
+        <div class="muted">Your traps only carry forward if you reach the exit.</div>
+      </div>
+      <div id="wireSection">
+        <h2 style="margin-top:12px">Rewire a switch you've inspected</h2>
+        <div class="row">
+          <select id="wSwitch"></select>
+          <select id="wEffect"><option>arm</option><option>disarm</option><option>invert</option><option>none</option></select>
+          → <select id="wTarget"></select>
+          <button id="bWire">Wire</button>
+        </div>
+      </div>
+      <div id="mineSection">
+        <h2 style="margin-top:12px">Your traps</h2>
+        <div id="mine" class="muted"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Command</h2>
+      <div class="row"><input id="cmd" style="flex:1" placeholder="e.g. drop snare armed then cache at 5"><button id="bCmd">Do</button></div>
+      <div id="err" class="err"></div>
+    </div>
+  </div>
+</main>
+
+<div id="setup" class="overlay">
+  <div class="card">
+    <h2>Enter a seed</h2>
+    <div class="row">Runner name <input id="name" value="dan" size="14">
+      Faction <select id="faction"></select></div>
+    <div id="factionMotto" class="muted"></div>
+    <div id="factionLockNote" class="muted"></div>
+    <div id="handicapNote" class="muted"></div>
+
+    <div id="chainBox" class="hide" style="margin-top:14px">
+      <h2>You've been invited to a chain</h2>
+      <p id="chainFrom"></p>
+      <div class="row"><button id="bContinue" class="primary">Start run</button></div>
+    </div>
+
+    <div style="margin-top:14px">
+      <h2>Difficulty</h2>
+      <div class="tierpick" id="tierPick"></div>
+      <div class="muted" id="tierDesc"></div>
+    </div>
+
+    <div style="margin-top:14px">
+      <h2>This period: <span id="periodName"></span></h2>
+      <div class="tops" id="tops"></div>
+      <p class="muted" id="leaderNote"></p>
+    </div>
+
+    <div style="margin-top:14px">
+      <h2>Maps</h2>
+      <div class="maps" id="maps"></div>
+    </div>
+
+    <details style="margin-top:14px">
+      <summary class="muted">Leaderboards and faction standings</summary>
+      <div id="boards"></div>
+    </details>
+    <div id="setupErr" class="err"></div>
+  </div>
+</div>
+
+<div id="end" class="overlay hide">
+  <div class="card">
+    <h2>Run over: <span id="eOutcome"></span></h2>
+    <div class="score" id="eScore"></div>
+    <div id="eBreak" class="muted"></div>
+    <div id="ePar" style="margin:8px 0"></div>
+    <div id="eImpact" style="margin:8px 0"></div>
+    <div class="row"><button id="bWatchPred" class="hide"></button></div>
+
+    <h2 style="margin-top:14px">Saved to the chain</h2>
+    <div class="row">
+      <button id="bHotseat" class="hide">Hotseat: next runner on this chain</button>
+      <button id="bHome">Back to maps</button>
+    </div>
+    <div id="eSaved" style="margin:4px 0"></div>
+
+    <h2 style="margin-top:14px">Designers on this chain</h2>
+    <div id="eLedger"></div>
+
+    <div id="eSealed" class="banner hide" style="margin:14px 0 0"></div>
+    <div id="eRevealBox">
+      <h2 style="margin-top:14px">Reveal: what was really there</h2>
+      <div id="eLayout" class="log"></div>
+      <h2 style="margin-top:14px">This seed's glyphs</h2>
+      <div id="eGlyphs" class="log"></div>
+    </div>
+    <h2 style="margin-top:14px" id="eLogTitle">Full log, with causes</h2>
+    <div id="eLog" class="log"></div>
+    <div id="eVerify" class="muted" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<div id="watch" class="overlay hide">
+  <div class="card" style="max-width:900px">
+    <h2 id="wTitle"></h2>
+    <p class="muted" id="wNote"></p>
+    <svg id="wMap" viewBox="0 -20 790 360" aria-label="Replay map"></svg>
+    <div class="muted">Truth view: ☠ armed trap · ○ dormant · ⏱ timed · ★ dropped by the runner you're watching</div>
+    <div class="row">
+      <button id="wFirst">⏮</button><button id="wPrev">◀</button>
+      <button id="wPlay" class="primary">▶ Play</button>
+      <button id="wNext">▶</button><button id="wLast">⏭</button>
+      <span id="wStep" class="muted"></span>
+    </div>
+    <div class="stats" id="wStats"></div>
+    <div id="wEvents" class="log" style="margin-top:8px"></div>
+    <div class="row"><button id="wClose">Close</button></div>
+  </div>
+</div>
+
+<script src="echowake-api.js"></script>
+<script src="sim.js"></script>
+<script>
+(() => {
+  const Sim = window.TrapSim;
+  const $ = (id) => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+  // The run lives on the server. The client holds only the runner view (v) and a small stand-in state (s) built from
+  // it for drawing the map: the room, rooms visited, doors, and the runner's own traps. Nothing hidden is in either.
+  let s = null, v = null, sel = null, runId = null, chain = null;
+  const pseudo = (view) => ({
+    seedId: view.seedId, room: view.room, visited: view.visited, over: view.over, practice: view.practice, rules: view.rules,
+    runner: view.runner, faction: view.faction,
+    doors: Object.fromEntries(view.doors.map((d) => [d.between, { closed: d.closed }])),
+    traps: Object.fromEntries(view.myTrapRooms.map((r) => [r, { fresh: true }])),
+  });
+  const json = (body) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const seed = () => Sim.getSeed(s.seedId);
+  // Seeds come from the server: secret seeds can't be generated here. Adopted, they work with Sim.getSeed.
+  const seedLoads = {};
+  const loadSeed = (id) => seedLoads[id] || (seedLoads[id] = api(`api/seed/${encodeURIComponent(id)}`).then(Sim.adoptSeed));
+
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  };
+  const api = async (url, opts) => {
+    const r = await fetch(url, opts);
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || `${url} failed`);
+    return j;
+  };
+  const fac = (f) => (f ? `<span class="fac ${f}">${esc(Sim.FACTIONS[f].label)}</span>` : '');
+
+  // ---------- setup ----------
+  $('grammar').innerHTML = Sim.GRAMMAR.map(esc).join(' ');
+  $('faction').innerHTML = Object.entries(Sim.FACTIONS).map(([k, f]) => `<option value="${k}">${f.label}</option>`).join('');
+  $('name').value = store.get('trap-relay-name') || 'dan';
+  $('faction').value = store.get('trap-relay-faction') || 'wardens';
+  const showMotto = () => { $('factionMotto').textContent = `"${Sim.FACTIONS[$('faction').value].motto}"`; };
+  // The upset bonus on each map card depends on your faction.
+  $('faction').oninput = () => { showMotto(); renderSetup(); }; showMotto();
+  // Which chain a map card offers depends on who is running.
+  // A runner's faction locks for the period at their first saved run; the picker follows the lock.
+  let lockTimer = null;
+  async function checkFactionLock() {
+    const name = ($('name').value || '').trim().toLowerCase();
+    let lock = null;
+    if (name) { try { lock = (await api(`api/faction?runner=${encodeURIComponent(name)}`)).lock; } catch (e) { /* server not running */ } }
+    $('faction').disabled = !!lock;
+    if (lock) { $('faction').value = lock.faction; showMotto(); }
+    $('factionLockNote').textContent = lock
+      ? `Your faction is locked to ${Sim.FACTIONS[lock.faction].label} for this period (${lock.period}). You can switch from next period.`
+      : 'Your faction locks for the period when you save your first run in it.';
+    renderSetup();
+  }
+  $('name').oninput = () => { renderSetup(); clearTimeout(lockTimer); lockTimer = setTimeout(() => { checkFactionLock(); loadSetup(); }, 300); };
+  checkFactionLock();
+
+  let ix = { period: '', nextSeed: {}, seeds: {}, tiers: {} };
+  let tier = Number(store.get('trap-relay-tier')) || 1;
+  async function loadSetup() {
+    try { ix = await api(`api/index?runner=${encodeURIComponent(($('name').value || '').trim().toLowerCase())}`); } catch (e) { $('setupErr').textContent = `${e.message}. Is the page served by serve.js?`; }
+    renderSetup();
+  }
+
+  // Everything on the setup screen is per difficulty tier: seeds, leaderboards and the period's titles.
+  function renderSetup() {
+    $('tierPick').innerHTML = Object.entries(Sim.TIERS).map(([k, t]) =>
+      `<button data-tier="${k}" class="${Number(k) === tier ? 'on' : ''}">${k} · ${esc(t.label)}</button>`).join('');
+    for (const b of $('tierPick').querySelectorAll('[data-tier]')) {
+      b.onclick = () => { tier = Number(b.dataset.tier); store.set('trap-relay-tier', tier); renderSetup(); };
+    }
+    $('tierDesc').textContent = `${Sim.TIERS[tier].desc} Turn cap ${Sim.TIERS[tier].turnCap}.`;
+    const tb = (ix.tiers && ix.tiers[tier]) || { factions: [], saboteurs: [], benefactors: [] };
+    // One period (a week) decides the leader, the top saboteur and the top benefactor, separately per tier.
+    $('periodName').textContent = `${ix.period} · ${Sim.TIERS[tier].label}`;
+    const ld = tb.leader, sb = tb.topSaboteur, bf = tb.topBenefactor;
+    $('tops').innerHTML = [
+      // A tie that survives the tie-breaks is a shared title; the first leader listed picks the map.
+      `Leader: ${ld ? `${(tb.leaders || [ld]).map((l) => `<b>${esc(l.runner)}</b> ${fac(l.faction)}`).join(', ')} · ${ld.score} on ${esc(ld.seed)}${(tb.leaders || []).length > 1 ? ' <span class="muted">(shared; the first picks the map)</span>' : ''}` : '<span class="muted">nobody yet</span>'}`,
+      `Top saboteur: ${sb ? `${(tb.topSaboteurs || [sb]).map((d) => `<b>${esc(d.name)}</b>`).join(', ')} · ${sb.saboteur} pts${(tb.topSaboteurs || []).length > 1 ? ' <span class="muted">(shared)</span>' : ''}` : '<span class="muted">nobody yet</span>'}`,
+      `Top benefactor: ${bf ? `${(tb.topBenefactors || [bf]).map((d) => `<b>${esc(d.name)}</b>`).join(', ')} · ${bf.benefactor} pts${(tb.topBenefactors || []).length > 1 ? ' <span class="muted">(shared)</span>' : ''}` : '<span class="muted">nobody yet</span>'}`,
+    ].map((x) => `<span>${x}</span>`).join('');
+    const mp = ix.mapPicker;
+    // Handicap, golf-style: lifetime average gap to par over ranked runs. 0 is perfect play; lower is better.
+    const me = ($('name').value || '').trim().toLowerCase();
+    const hc = (ix.handicaps || {})[me];
+    const need = ix.handicapMin || 3;
+    $('handicapNote').textContent = !me ? '' : hc && hc.value !== null
+      ? `Your handicap: ${hc.value} (average points below par over your ${hc.runs} ranked runs; 0 is perfect play).`
+      : `Your handicap appears after ${need} ranked runs (you have ${hc ? hc.runs : 0}).`;
+    $('leaderNote').textContent = 'The leader is the best single run this period; a tie goes to the lower handicap, and a tie on that is shared. '
+      + (mp ? `Next map pick: ${mp.runner}, leader of the ${Sim.TIERS[mp.tier].label} tier${mp.shared.length > 1 ? ` (drawn from ${mp.shared.join(', ')})` : ''}. ` : 'Nobody has earned the next map pick yet. ')
+      + 'The highest tier with a leader picks between three maps; a no-show gets a random map. Here anyone can open the next seed, for testing.';
+    // Live maps are in the pool the leader picks from; retired maps rest and aren't shown.
+    const shown = Object.entries(Sim.MAPS).filter(([, m]) => m.status === 'live');
+    const resting = Object.values(Sim.MAPS).filter((m) => m.status === 'retired').map((m) => m.name);
+    $('maps').innerHTML = (resting.length ? `<p class="muted" style="grid-column:1/-1">Resting (retired): ${esc(resting.join(', '))}.</p>` : '') + shown.map(([id, m]) => {
+      const ns = (ix.nextSeed[id] || {})[tier] || { current: Sim.seedIdOf(id, tier, 1), next: null };
+      const num = (sid) => sid.split('#')[1];
+      const me = ($('name').value || '').trim().toLowerCase();
+      const mine = ix.me && ix.me.runner === me ? ix.me : (ix.me || { open: [], played: [] });
+      const resume = (mine.open || []).find((o) => o.seed === ns.current);
+      const played = (mine.played || []).includes(ns.current);
+      // The server chooses the chain: the longest one on your track with a free slot, or a new one (opened by
+      // stand-ins when there is placement data). You learn your chain position and its faction briefing on entry.
+      const main = resume
+        ? `<button class="primary" data-go="${ns.current}">Resume your run in seed ${num(ns.current)}</button>`
+        : played
+        ? `<div class="muted">You've made your attempt at seed ${num(ns.current)}. Practice on it opens when its chains close at the daily reset (08:00 UTC).</div>`
+        : `<button class="primary" data-go="${ns.current}">Play seed ${num(ns.current)}</button>`;
+      const openNext = ns.next && !(mine.played || []).includes(ns.next) ? `<button data-go="${ns.next}">Open seed ${num(ns.next)} (leader's choice)</button>` : '';
+      return `<div class="mapcard"><h3>${esc(m.name)}, ${esc(m.year)}</h3><div class="shape">${esc(m.shape)}</div>
+        <div>${esc(m.blurb)}</div>${main}${openNext}<div class="err" data-carderr></div></div>`;
+    }).join('');
+    for (const b of $('maps').querySelectorAll('[data-go]')) b.onclick = () => begin(b.dataset.go, null);
+    const practiceList = (ix.closedSeeds || []).filter((id) => Sim.parseSeedId(id).tier === tier);
+    $('maps').insertAdjacentHTML('beforeend', practiceList.length ? `<p class="muted" style="grid-column:1/-1">Practice on a closed seed: ${practiceList.map((id) => `<a href="#" data-practice="${id}">${esc(Sim.seedName(id))}</a>`).join(' · ')}</p>` : '');
+    for (const a of $('maps').querySelectorAll('[data-practice]')) a.onclick = (e) => { e.preventDefault(); begin(a.dataset.practice, null); };
+
+    const boards = Object.entries(ix.seeds).filter(([id]) => Sim.parseSeedId(id).tier === tier)
+      .map(([id, list]) => `<h2 style="margin-top:10px">${esc(Sim.seedName(id))}</h2>
+      <table class="board"><tr><th>#</th><th>Runner</th><th>Handicap</th><th>Faction</th><th>Score</th><th>Outcome</th></tr>${list.slice(0, 8).map((r, i) => {
+        const h = (ix.handicaps || {})[r.runner];
+        return `<tr><td>${i + 1}</td><td>${esc(r.runner)}</td><td class="muted">${h && h.value !== null ? h.value : '–'}</td><td>${fac(r.faction)}</td><td><b>${r.score}</b></td><td>${esc(r.outcome)}${r.ranked ? '' : ` · <span class="muted">opening run, unranked</span>`}</td></tr>`;
+      }).join('')}</table>`).join('');
+    const signed = (x) => (x === null || x === undefined ? '–' : x > 0 ? `+${x}` : `${x}`);
+    const facs = `<h2 style="margin-top:10px">Faction standings this period</h2>
+      <div class="muted">Ranked by each runner's best score minus par (the best possible on the layout they faced), averaged per faction. 0 means perfect play.</div>
+      <table class="board"><tr><th>Faction</th><th>vs par</th><th>Raw mean</th><th>Runners</th></tr>${
+      tb.factions.map((f) => `<tr><td>${fac(f.faction)}</td><td><b>${signed(f.vsPar)}</b></td><td class="muted">${f.mean ?? '–'}</td><td>${f.runners}</td></tr>`).join('')}</table>`;
+    $('boards').innerHTML = (boards || '<p class="muted">No saved runs on this tier yet.</p>') + facs
+      + `<h2 style="margin-top:10px">Designers this period</h2>${boardsHTML(tb)}`;
+  }
+
+  // Saboteur and benefactor boards side by side. Takes { saboteurs, benefactors } from Sim.standings or the relay index.
+  function boardsHTML(st) {
+    const table = (title, rows, key, detail) => `<table class="board" style="display:inline-table;vertical-align:top;margin-right:24px">
+      <tr><th colspan="3">${title}</th></tr>${rows.length ? rows.slice(0, 8).map((d, i) =>
+        `<tr><td>${i + 1}</td><td>${esc(d.name)}</td><td><b>${d[key]}</b> <span class="muted">${esc(detail(d))}</span></td></tr>`).join('')
+        : '<tr><td colspan="3" class="muted">Nobody yet.</td></tr>'}</table>`;
+    return table('Saboteurs', st.saboteurs || [], 'saboteur', (d) => `(${d.dealt} dealt, ${d.drawn} drawn)`)
+      + table('Benefactors', st.benefactors || [], 'benefactor', (d) => `(${d.given} given)`);
+  }
+
+  // Invite links: ?chain=<id> joins that chain (if it has a free slot). Handoff files are no longer served.
+  const inviteChain = params.get('chain');
+  if (inviteChain) {
+    api(`api/chain/${encodeURIComponent(inviteChain)}`).then((c) => {
+      $('chainFrom').innerHTML = `${esc(Sim.seedName(c.seed))} · ${c.saves} run${c.saves === 1 ? '' : 's'} saved on it so far. The layout is sealed: you see it only by running it.`
+        + (c.closed ? ' <b>This seed has closed, so this will be a practice run.</b>' : '');
+      $('chainBox').classList.remove('hide');
+      $('bContinue').onclick = () => begin(c.seed, c.id);
+    }).catch((e) => { $('setupErr').textContent = e.message; });
+  }
+  if (params.get('parent')) $('setupErr').textContent = 'Handoff links from before Stage 1 no longer work: layouts stay on the server now. Ask for an invite link (?chain=…) instead.';
+
+  async function begin(seedId, chainId) {
+    $('setupErr').textContent = '';
+    const name = $('name').value.trim().toLowerCase() || 'runner';
+    const faction = $('faction').value;
+    store.set('trap-relay-name', name); store.set('trap-relay-faction', faction);
+    try {
+      const out = await api('api/claim', json({ seed: seedId, runner: name, faction, chain: chainId || undefined, channel: 'web' }));
+      start(out);
+    } catch (e) { $('setupErr').textContent = e.message; }
+  }
+  // Show a claimed run (new or resumed). The banner says what kind of run it is and who set the traps.
+  async function start(out) {
+    try { await loadSeed(out.view.seedId); } catch (e) { $('setupErr').textContent = e.message; return; }
+    runId = out.run; chain = out; sel = null;
+    v = out.view; s = pseudo(v);
+    $('seedName').textContent = seed().name;
+    const opening = !v.practice && out.ranked === false;
+    const mix = Object.entries(out.briefing || {});
+    const stronger = mix.filter(([f]) => Sim.beats(f, v.faction)).map(([f]) => Sim.FACTIONS[f].label);
+    const briefing = mix.length
+      ? ` Traps on this chain were set by ${mix.map(([f, n]) => `${Sim.FACTIONS[f].label} ×${n}`).join(', ')}${stronger.length ? `; each ${stronger.join('/')} Spike, Snare or Leech that springs on you is worth +${Sim.UPSET_BONUS} if you escape` : ''}.`
+      : '';
+    $('practice').classList.remove('hide');
+    $('practice').textContent = v.practice ? `Practice run: ${v.practice}. It isn't scored or handed on.`
+      : opening ? `Opening run ${out.position} of ${out.openers}: it hands on and your traps earn designer credit, but your score isn't ranked.${briefing}`
+      : `Ranked run, chain position ${out.position}. Finishing saves it onto the chain.${briefing}`;
+    $('setup').classList.add('hide');
+    render();
+    if (out.result) showEnd(out.result);
+  }
+
+  // ---------- actions ----------
+  let busy = false;
+  async function act(a) {
+    if (busy) return;
+    busy = true;
+    $('err').textContent = '';
+    try {
+      const out = await api(`api/run/${runId}/act`, json({ action: a }));
+      v = out.view; s = pseudo(v);
+      render();
+      if (out.result) showEnd(out.result);
+    } catch (e) { $('err').textContent = e.message; }
+    busy = false;
+  }
+  $('bMove').onclick = () => act(`move ${sel}`);
+  $('bPeek').onclick = () => act(`peek ${sel}`);
+  $('bInspect').onclick = () => act(`inspect ${sel}`);
+  $('bFlip').onclick = () => act('flip');
+  $('bInspectSwitch').onclick = () => act(`inspect ${seed().rooms[s.room].switch}`);
+  $('bWait').onclick = () => act('wait');
+  $('bDrop').onclick = () => act(dropCmd());
+  $('bScratch').onclick = () => act(`scratch ${$('xTarget').value} ${$('xGlyph').value}`);
+  $('bWire').onclick = () => act(`wire ${$('wSwitch').value} ${$('wEffect').value} ${$('wTarget').value}`);
+  $('bCmd').onclick = () => { act($('cmd').value); $('cmd').value = ''; };
+  $('cmd').onkeydown = (e) => { if (e.key === 'Enter') $('bCmd').click(); };
+  for (const id of ['dKind', 'dArmed', 'dTimed', 'dAt']) $(id).oninput = () => renderDrop(v);
+
+  function dropCmd() {
+    let c = `drop ${$('dKind').value} ${$('dArmed').value}`;
+    if ($('dTimed').checked) c += ` at ${$('dAt').value}`;
+    if ($('dArmed').value === 'dormant' && $('dWireSw').value) c += ` wire ${$('dWireSw').value} ${$('dWireEff').value}`;
+    return c;
+  }
+  // Only offer what the runner can actually do right now.
+  const show = (id, on) => { $(id).classList.toggle('hide', !on); return on; };
+  function setOptions(id, items) {
+    const keep = $(id).value;
+    $(id).innerHTML = items.map(([value, label]) => `<option value="${value}">${esc(label)}</option>`).join('');
+    if (items.some(([value]) => value === keep)) $(id).value = keep;
+  }
+
+  function renderDrop(v) {
+    const m = seed();
+    const mineHere = s.traps[s.room] && s.traps[s.room].fresh;
+    const price = (kind, timed) => v.prices.drop[timed ? `${kind}@timed` : kind];
+    const affordable = Object.entries(Sim.KINDS).filter(([kind]) => price(kind) !== undefined && price(kind) <= v.loot);
+    const canDrop = show('dropSection', !s.over && s.room !== m.start && s.room !== m.exit && !mineHere && affordable.length > 0);
+    if (!canDrop) return false;
+
+    setOptions('dKind', affordable.map(([k, d]) => [k, `${d.label} (${price(k)}): ${d.desc}`]));
+    const inspected = Object.keys(v.switchIntel);
+    // A dormant trap must be woken by a switch you have inspected, so only offer it when there is one.
+    setOptions('dArmed', [['armed', 'armed'], ...(inspected.length ? [['dormant', 'dormant']] : [])]);
+    setOptions('dWireSw', inspected.map((k) => [k, k]));
+    show('dWireRow', $('dArmed').value === 'dormant');
+
+    // Each trap has one fixed partner; offer the timer only when the timed version is affordable.
+    $('dAt').max = v.turnCap; // timers run up to this map's turn cap
+    const kind = $('dKind').value;
+    const partner = Sim.KINDS[kind].then;
+    if (!show('dTimedRow', price(kind, true) <= v.loot)) $('dTimed').checked = false;
+    $('dThenLabel').textContent = `a ${Sim.KINDS[partner].label} (${Sim.KINDS[partner].desc})`;
+
+    const then = $('dTimed').checked ? { kind: partner } : null;
+    const cost = price(kind, !!then);
+    $('dCost').textContent = `Costs ${cost} of your ${v.loot} loot${cost > Sim.trapCost(kind, then, s.rules) ? ' (replacing the trap here costs at least its price)' : ''}`;
+    return true;
+  }
+
+  // ---------- render ----------
+  function render() {
+    const m = seed();
+    $('sRunner').innerHTML = `${esc(v.runner)} ${fac(v.faction)}`; $('sRoom').textContent = `${v.room} · ${m.rooms[v.room].label}`;
+    $('sTurn').textContent = v.turn; $('sCap').textContent = v.turnCap; $('sHp').textContent = v.hp; $('sSup').textContent = v.supplies; $('sLoot').textContent = v.loot;
+    renderMap(v);
+
+    const adj = Sim.neighbors(m, s.room);
+    $('selName').textContent = sel ? `${sel} · ${m.rooms[sel].label}` : '–';
+    const R = Sim.RULES;
+    const canAdj = !!sel && adj.includes(sel) && !s.over;
+    const door = sel && s.doors[Sim.edgeKey(s.room, sel)];
+    const acts = [
+      show('bMove', canAdj && !(door && door.closed)),
+      show('bPeek', canAdj && v.supplies >= R.peekCost),
+      show('bInspect', canAdj && v.supplies >= R.inspectCost),
+    ];
+    show('selActions', acts.some(Boolean));
+    if (sel) {
+      const r = v.rooms[sel];
+      const bits = [`Loot ${r.loot}`, `Exits: ${r.neighbors.join(', ')}`];
+      if (r.switch) bits.push(`${r.switch.id}: ${r.switch.sign ? `"${r.switch.sign}"` : 'payoff unknown'}${r.switch.flipped ? ' (flipped)' : ''} · mark ${markText(r.switch.mark, v)}`);
+      if (r.mark) bits.push(`Trap mark ${markText(r.mark, v)}`);
+      if (r.scratch) bits.push(scratchText(r.scratch, v));
+      if (r.intel) bits.push(`Your intel (${r.intel.how}, turn ${r.intel.turn}): ${r.intel.result}`);
+      if (sel === s.room) bits.push('You are here.');
+      else if (!adj.includes(sel)) bits.push('Not adjacent to you.');
+      else if (door && door.closed) bits.push('The door is closed. A switch opens it.');
+      $('selInfo').innerHTML = bits.map(esc).join('<br>');
+    } else $('selInfo').textContent = 'Click a room on the map.';
+
+    const here = v.rooms[v.room];
+    const hs = [];
+    if (here.switch) {
+      hs.push(`${here.switch.id}: ${here.switch.sign ? `"${here.switch.sign}"` : 'payoff unknown'} (${here.switch.flipped ? 'flipped' : 'unflipped'}) · mark ${markText(here.switch.mark, v)}`);
+      if (here.switch.id in v.switchIntel) hs.push(`Inspected wiring: ${v.switchIntel[here.switch.id]}`);
+    } else hs.push('No switch here.');
+    $('hereInfo').innerHTML = hs.map(esc).join('<br>');
+    // Say what each button does: flipping delivers the payoff, inspecting reveals the switch's true wiring.
+    if (here.switch) {
+      const payoff = here.switch.sign ? here.switch.sign.replace(/\.$/, '') : null;
+      $('bFlip').textContent = payoff ? `Flip ${here.switch.id}: ${payoff[0].toLowerCase()}${payoff.slice(1)} · 1 turn` : `Flip ${here.switch.id} · 1 turn`;
+      $('bInspectSwitch').textContent = `Inspect ${here.switch.id}'s true wiring · ${R.inspectSwitchCost} supplies`;
+    }
+    show('bFlip', !!here.switch && !here.switch.flipped && !s.over);
+    // Inspecting a switch twice teaches nothing new, so it is offered once.
+    show('bInspectSwitch', !!here.switch && !(here.switch.id in v.switchIntel) && v.supplies >= R.inspectSwitchCost && !s.over);
+    show('hereCard', show('bWait', !s.over));
+    if (here.scratch) hs.push(scratchText(here.scratch, v));
+    $('hereInfo').innerHTML = hs.map(esc).join('<br>');
+    // Runner marks (rules 8): a room letter and one of this tier's glyphs, for a supply each.
+    const X = Sim.SCRATCH, T = tierOf();
+    const mineCount = Object.values(v.rooms).filter((r) => r.scratch && r.scratch.mine).length;
+    const canScratch = show('scratchRow', s.rules >= 8 && !s.over && v.supplies >= X.cost && mineCount < X.perRun && !(here.scratch && here.scratch.mine));
+    if (canScratch) {
+      setOptions('xTarget', Object.keys(v.rooms).map((id) => [id, id]));
+      const g = guesses(), known = knownNouns(v);
+      setOptions('xGlyph', [...T.glyphs.noun, ...T.glyphs.verb].map((x) => [x, `${x}${known[x] ? ` (${shortName(known[x])})` : g[x] ? ` (${shortName(g[x])}?)` : ''}`]));
+      $('bScratch').textContent = `Scratch · ${X.cost} supply${here.scratch ? ` (over ${here.scratch.by}'s)` : ''}`;
+    }
+
+    const inspected = Object.keys(v.switchIntel);
+    const myRooms = Object.entries(s.traps).filter(([, t]) => t.fresh).map(([r]) => r);
+    const canWire = show('wireSection', !s.over && inspected.length > 0 && myRooms.length > 0);
+    if (canWire) {
+      setOptions('wSwitch', inspected.map((k) => [k, k]));
+      setOptions('wTarget', myRooms.map((r) => [r, r]));
+    }
+    const hasMine = show('mineSection', v.myTraps.length + v.myWiring.length > 0);
+    $('mine').innerHTML = [...v.myTraps.map((t) => `★ ${esc(t)}`), ...v.myWiring.map((w) => `⚙ ${esc(w)}`)].join('<br>');
+    const canDrop = renderDrop(v);
+    show('trapCard', canDrop || canWire || hasMine);
+
+    renderDecoder(v);
+    // Rule explanations and glyph lessons stand out from plain events.
+    const cls = (l) => (/springs|catches|drains/.test(l) ? 'spring' : / means \S+ on this seed|is closed\. Its shape|wire on the map/.test(l) ? 'hint' : '');
+    $('log').innerHTML = v.log.map((l) => `<div class="${cls(l)}">${esc(l)}</div>`).join('');
+    $('log').scrollTop = 1e6;
+  }
+
+  // ---------- glyph decoder ----------
+  // The runner's own guesses at this seed's vocabulary, kept per seed and runner in this browser.
+  const decKey = () => `trap-relay-decoder:${s.seedId}:${s.runner}`;
+  const guesses = () => { try { return JSON.parse(store.get(decKey()) || '{}'); } catch (e) { return {}; } };
+  const shortName = (k) => k[0].toUpperCase() + k.slice(1);
+  // Shapes are nouns and strokes are verbs; a mark holds at most one of each.
+  const tierOf = () => Sim.TIERS[seed().tier];
+  const isNoun = (glyph) => tierOf().glyphs.noun.includes(glyph);
+  const split = (mk) => {
+    const gs = Array.from(mk.glyphs);
+    return { noun: gs.find(isNoun) || null, verb: gs.find((x) => !isNoun(x)) || null };
+  };
+
+  // A mark as text, with the runner's current reading of it.
+  // Glyphs the runner knows for certain, from the engine: the door's shape, plain signs, and every glyph a
+  // flip, spring or inspect has confirmed this run. Returns { glyph: meaning }.
+  const knownNouns = (v) => v.glyphs || {};
+
+  // What a mark's wire connects to, in words: only what the runner can see.
+  function wiredTo(mk, v) {
+    if (!mk.link) return '';
+    for (const [id, r] of Object.entries(v.rooms)) {
+      if (r.switch && r.switch.mark.link === mk.link && r.switch.mark !== mk) return `, wired to switch ${r.switch.id} in ${id}`;
+      if (r.mark && r.mark.link === mk.link && r.mark !== mk) return `, wired to the trap in ${id}`;
+    }
+    return ', wired to a trap you have not come near yet';
+  }
+
+  // A runner mark in words: who left it, and the runner's own reading of its glyph. Nothing checks it.
+  function scratchText(sc, v) {
+    const g = guesses(), known = knownNouns(v);
+    const reading = known[sc.glyph] ? shortName(known[sc.glyph]) : g[sc.glyph] ? `${shortName(g[sc.glyph])} (your guess)` : '?';
+    return `Runner mark "${sc.target} ${Sim.glyphText(sc.glyph)}" scratched by ${sc.mine ? 'you' : `${sc.by}${sc.faction ? ` (${Sim.FACTIONS[sc.faction].label})` : ''}`}: about room ${sc.target}; your reading of ${Sim.glyphText(sc.glyph)}: ${reading}. Unchecked: it may be true or a bluff.`;
+  }
+
+  function markText(mk, v) {
+    if (!mk) return '–';
+    if (mk.faded && !mk.glyphs) return `${mk.faded}, faded: the seed's trap here is gone, so the carving no longer holds`;
+    if (!mk.glyphs && !mk.faded) return 'no glyphs: no payoff, not wired';
+    if (!mk.glyphs) return `no payoff; its stroke ${mk.faded} has faded (rewired since the seed was made)`;
+    const fadedNote = mk.faded ? `; its stroke ${mk.faded} and wire have faded (rewired since the seed was made)` : '';
+    const g = guesses(), { noun, verb } = split(mk), known = knownNouns(v);
+    const reading = [];
+    if (noun) reading.push(known[noun] ? shortName(known[noun]) : g[noun] ? `${shortName(g[noun])} (your guess)` : '?');
+    else reading.push('no noun');
+    if (verb) reading.push(known[verb] || (g[verb] ? `${g[verb]} (your guess)` : '?'));
+    return `${mk.glyphs}${wiredTo(mk, v)}${fadedNote}. Your reading: ${reading.join(', ')}`;
+  }
+
+  function renderDecoder(v) {
+    const nouns = new Set(), verbs = new Set();
+    const add = (mk) => {
+      if (!mk) return;
+      const { noun, verb } = split(mk);
+      if (noun) nouns.add(noun);
+      if (verb) verbs.add(verb);
+    };
+    for (const r of Object.values(v.rooms)) { if (r.switch) add(r.switch.mark); add(r.mark); }
+    const door = v.doors[0] && v.doors[0].mark;
+    if (door) nouns.add(door);
+    const g = guesses(), known = knownNouns(v);
+    const row = (glyph, cls, options) => {
+      if (cls === 'noun' && known[glyph] === 'door') return `<div class="g">${esc(glyph)}</div><div>Door <span class="muted">(it is on the exit door)</span></div>`;
+      if (known[glyph]) return `<div class="g">${esc(glyph)}</div><div>${shortName(known[glyph])} <span class="muted">(confirmed)</span></div>`;
+      const open = options.filter((o) => !Object.values(known).includes(o));
+      const opts = ['<option value="">?</option>', ...open.map((o) => `<option value="${o}" ${g[glyph] === o ? 'selected' : ''}>${esc(shortName(o))}</option>`)];
+      return `<div class="g">${esc(Sim.glyphText(glyph))}</div><select data-glyph="${esc(glyph)}">${opts.join('')}</select>`;
+    };
+    const T = tierOf();
+    $('decoder').innerHTML = `<div class="muted" style="grid-column:1/-1">${T.glyphs.noun.length + T.glyphs.verb.length} glyphs on this tier: `
+      + `${esc(T.glyphs.noun.join(' '))}${T.glyphs.verb.length ? ` (shapes) and ${esc(T.glyphs.verb.join(' '))} (strokes)` : ''}.</div>`
+      + [
+        ...[...nouns].map((n) => row(n, 'noun', T.nouns.filter((k) => k !== 'door'))),
+        ...[...verbs].map((vb) => row(vb, 'verb', T.verbs)),
+      ].join('');
+    for (const el of $('decoder').querySelectorAll('select')) {
+      el.onchange = () => {
+        const next = guesses();
+        if (el.value) next[el.dataset.glyph] = el.value; else delete next[el.dataset.glyph];
+        store.set(decKey(), JSON.stringify(next));
+        render();
+      };
+    }
+  }
+
+  const markWidth = (mk) => Array.from(mk.glyphs || '').length + Array.from(mk.faded || '').length;
+  // A mark's box; returns the SVG and the box's centre, so wires can join switch and trap marks.
+  function markSVG(x, y, mk) {
+    if (!mk || (!mk.glyphs && !mk.link && !mk.faded)) return { svg: '', cx: x, cy: y };
+    // Faded glyphs (rules 9) stay in place, struck through, so the runner sees that the carving no longer holds.
+    const n = Math.max(1, markWidth(mk)), w = 14 + n * 18;
+    return {
+      svg: `<g class="mark ${mk.link ? `l${mk.link}` : ''}${mk.faded && !mk.glyphs ? ' gone' : ''}"><rect x="${x}" y="${y}" width="${w}" height="28" rx="6"/>`
+        + `<text x="${x + 7}" y="${y + 21}">${esc(Sim.glyphText(mk.glyphs || (mk.faded ? '' : '·')))}${mk.faded ? `<tspan class="faded">${esc(Sim.glyphText(mk.faded))}</tspan>` : ''}</text></g>`,
+      cx: x + w / 2, cy: y + 14,
+    };
+  }
+
+  // A wire between a switch's mark and its trap's mark: dashed until the switch is flipped, then solid and labelled.
+  function wireSVG(a, b, link, flippedBy) {
+    const mx = (a.cx + b.cx) / 2, my = Math.min(a.cy, b.cy) - 34;
+    const path = `M${a.cx},${a.cy} Q${mx},${my} ${b.cx},${b.cy}`;
+    return `<path class="wire l${link}${flippedBy ? ' done' : ''}" d="${path}"/>`
+      + (flippedBy ? `<text class="wirelbl" x="${mx}" y="${(a.cy + b.cy) / 4 + my / 2 - 4}" text-anchor="middle">${esc(flippedBy)} flipped</text>` : '');
+  }
+
+  function renderMap(v) {
+    $('map').innerHTML = mapSVG(s, v, { sel });
+    for (const g of $('map').querySelectorAll('.room')) g.onclick = () => { sel = g.dataset.room; render(); };
+  }
+
+  // Runner's view by default; opts.truth draws every trap (for watching), opts.redact hides the watched runner's drops.
+  function mapSVG(st, v, opts) {
+    const m = Sim.getSeed(st.seedId), R = m.rooms, W = 104, H = 64;
+    let out = '', marks = '';
+    const ends = {}; // link -> { sw, trap }: a wire is drawn once both of its marks are visible
+    for (const [a, b] of m.edges) {
+      const d = st.doors[Sim.edgeKey(a, b)];
+      out += `<line class="edge" x1="${R[a].x}" y1="${R[a].y}" x2="${R[b].x}" y2="${R[b].y}"/>`;
+      if (d) {
+        const mx = (R[a].x + R[b].x) / 2, my = (R[a].y + R[b].y) / 2;
+        out += `<line class="${d.closed ? 'door-closed' : 'door-open'}" x1="${mx}" y1="${my - 20}" x2="${mx}" y2="${my + 20}"/>`;
+        // The door's glyph sits above the room marks on either side (they share the band just above the rooms),
+        // joined to the door bar by a short line, so it never covers a trap mark.
+        const top = Math.min(R[a].y, R[b].y) - H / 2 - 52;
+        out += `<line class="doorlink${d.closed ? '' : ' open'}" x1="${mx}" y1="${top + 28}" x2="${mx}" y2="${my - 20}"/>`;
+        marks += markSVG(mx - 16, top, { glyphs: m.marks.door, link: null }).svg;
+      }
+    }
+    for (const [id, r] of Object.entries(R)) {
+      const vr = v.rooms[id];
+      const cls = ['room', id === st.room ? 'here' : '', st.visited.includes(id) ? 'seen' : '', id === opts.sel ? 'sel' : ''].join(' ');
+      const badges = [];
+      if (vr.loot) badges.push(`◆${vr.loot}`);
+      if (vr.switch) {
+        // The payoff icon shows only when the runner can know it: plain signs, a flipped switch, or the truth view.
+        // A public seed (an open secret seed) carries no payoffs: read it from the sign, which is when it can be known.
+        const sign = vr.switch.sign || '';
+        const p = m.switches[vr.switch.id].payoff || { type: /exit door/.test(sign) ? 'open' : /cache/.test(sign) ? 'cache' : 'none', loot: 3 };
+        const known = opts.truth || vr.switch.sign;
+        badges.push(`⚙${vr.switch.id}${vr.switch.flipped ? '↓' : ''}${known ? ` ${p.type === 'open' ? '🚪' : p.type === 'cache' ? `+${p.loot}` : '∅'}` : ''}`);
+        // Marks overhang their room's corners by at most 6px: some maps leave only 6px between rooms.
+        const sm = markSVG(r.x - W / 2 - 6, r.y - H / 2 - 18, vr.switch.mark);
+        marks += sm.svg;
+        if (vr.switch.mark.link) ends[vr.switch.mark.link] = Object.assign(ends[vr.switch.mark.link] || {}, { sw: sm, id: vr.switch.id, flipped: vr.switch.flipped });
+      }
+      if (vr.mark) {
+        const tm = markSVG(r.x + W / 2 + 6 - (14 + Math.max(1, markWidth(vr.mark)) * 18), r.y - H / 2 - 18, vr.mark);
+        marks += tm.svg;
+        if (vr.mark.link) ends[vr.mark.link] = Object.assign(ends[vr.mark.link] || {}, { trap: tm });
+      }
+      if (vr.scratch) {
+        // Bottom-left corner, below the room: the scratched mark's room letter and glyph.
+        const label = `${vr.scratch.target}${Sim.glyphText(vr.scratch.glyph)}`, x = r.x - W / 2 - 2, y = r.y + H / 2 - 10;
+        marks += `<g class="scratch${vr.scratch.mine ? ' mine' : ''}"><rect x="${x}" y="${y}" width="40" height="22" rx="3" transform="skewX(-8)" transform-origin="${x} ${y}"/><text x="${x + 6}" y="${y + 16}">${esc(label)}</text></g>`;
+      }
+      const t = st.traps[id];
+      if (opts.truth) {
+        if (t && !t.fresh) badges.push(`${t.armed ? '☠' : '○'}${Sim.KINDS[t.kind].label}${t.then ? '⏱' : ''}`);
+        if (t && t.fresh && !opts.redact) badges.push(`★${Sim.KINDS[t.kind].label}`);
+      } else {
+        if (vr.intel) badges.push((vr.intel.result === 'empty' ? '✓' : vr.intel.how === 'peek' ? '?' : '!') + (/⏱|becomes/.test(vr.intel.result) ? '⏱' : ''));
+        if (t && t.fresh) badges.push('★');
+      }
+      out += `<g class="${cls}" data-room="${id}">
+        <rect x="${r.x - W / 2}" y="${r.y - H / 2}" width="${W}" height="${H}" rx="10"/>
+        <text x="${r.x}" y="${r.y - 12}" text-anchor="middle" font-size="16" font-weight="700">${id}</text>
+        <text class="lbl" x="${r.x}" y="${r.y + 3}" text-anchor="middle" font-size="10.5">${esc(r.label)}</text>
+        <text x="${r.x}" y="${r.y + 20}" text-anchor="middle" font-size="11.5">${esc(badges.join(' '))}</text>
+      </g>`;
+    }
+    const wires = Object.entries(ends).filter(([, e]) => e.sw && e.trap)
+      .map(([link, e]) => wireSVG(e.sw, e.trap, link, e.flipped ? e.id : null)).join('');
+    return out + wires + marks;
+  }
+
+  // ---------- end of run ----------
+  function showEnd(res) {
+    const sc = res.score, b = (sc && sc.breakdown) || {};
+    $('eOutcome').textContent = { escaped: 'escaped', dead: 'died', timeout: 'out of turns', abandoned: 'abandoned' }[res.outcome] || res.outcome;
+    $('eScore').textContent = res.status === 'practiced' ? `Practice score ${sc.total}` : res.ranked === false ? `Opening-run score ${sc.total} (unranked)` : `Score ${sc.total}`;
+    const lost = v.myTrapRooms.length;
+    $('eBreak').innerHTML = esc(res.outcome === 'escaped'
+      ? (b.hpLeft !== undefined
+        ? `${b.loot} loot + ${b.supplies} supplies + ${b.hpLeft} HP left + ${b.turnsLeft} (turns left ÷ 2)${b.upset ? ` + ${b.upset} upset bonus` : ''}`
+        : `${b.loot} loot + ${b.supplies} supplies − ${b.damage} damage − ${b.turns} (turns ÷ 2)${b.upset ? ` + ${b.upset} upset bonus` : ''}`)
+      : 'No score: you have to reach the exit.')
+      + (res.outcome !== 'escaped' && lost ? `<br><b>Your ${lost} trap${lost === 1 ? ' was' : 's were'} lost.</b> Traps only carry forward if you reach the exit.` : '')
+      + (res.collapsed ? '<br><b>Paradox collapse:</b> your traps would have left no way out of this timeline, so they were not handed on. Your score stands.' : '');
+    // Designer credit counts only avoidable harm, judged against par on the layout you faced.
+    $('eImpact').innerHTML = Object.entries(res.credited || {}).map(([o, i]) => {
+      const bits = [];
+      const hit = i.dealt - (i.fuseBonus || 0) + (i.unavoidable || 0);
+      if (hit + i.drawn) {
+        bits.push(`${esc(o)}'s traps cost you <b>${hit}</b> in damage, drain and turns`
+          + (i.unavoidable ? ` (<b>${i.unavoidable}</b> of it the best line takes too, so it earns nothing)` : '')
+          + `, and drew <b>${i.drawn}</b> supplies in scouting`
+          + (i.fuseBonus ? ` (plus a <b>${i.fuseBonus}</b> late-fuse bonus)` : '')
+          + `: <b>+${Sim.saboteurPoints(i)}</b> saboteur points to ${esc(o)}.`);
+      }
+      if (i.given) bits.push(`${esc(o)}'s boons gave you <b>${i.gave}</b>${i.aidBonus ? ` (plus a <b>${i.aidBonus}</b> early-aid bonus)` : ''}: <b>+${Sim.benefactorPoints(i)}</b> benefactor points to ${esc(o)}.`);
+      return bits.map((x) => `<div>${x}</div>`).join('');
+    }).join('') || '<div class="muted">No predecessor trap or boon touched you.</div>';
+    $('eLedger').innerHTML = res.ledger ? boardsHTML(res.ledger) : '<span class="muted">Practice runs carry no ledger.</span>';
+    // Until the seed's chains close at the daily reset, the traps you faced are still waiting for the runners after
+    // you, so the full reveal, the par line, the glyph key and replays stay sealed. You see what you actually met.
+    const sealed = !!res.sealed;
+    $('eSealed').classList.toggle('hide', !sealed);
+    $('eSealed').textContent = sealed ? 'The full reveal, the par line, this seed\'s glyphs and replays unlock when this seed\'s chains close at the daily reset (08:00 UTC). Until then the traps you faced are still waiting for the runners after you, so you see only what you met.' : '';
+    $('eRevealBox').classList.toggle('hide', sealed);
+    $('eLogTitle').textContent = sealed ? 'Your log' : 'Full log, with causes';
+    const pred = !sealed && res.predecessors && res.predecessors[0];
+    $('bWatchPred').classList.toggle('hide', !pred);
+    if (pred) {
+      $('bWatchPred').textContent = `Watch ${pred.runner}'s run (the last save before your claim)`;
+      $('bWatchPred').onclick = () => openWatch(pred.run, false, `${pred.runner}'s run`, 'Their layout is spent for you, so nothing is hidden, including the traps they left.');
+    }
+    const p = res.par;
+    if (!p) $('ePar').innerHTML = '<span class="muted">Par: no escape was possible on this layout.</span>';
+    else {
+      const gap = Math.round((p.score - sc.total) * 10) / 10;
+      const verdict = gap <= 0 ? '<b>You matched par.</b>' : `You left <b>${gap}</b> on the table.`;
+      $('ePar').innerHTML = `Par <b>${p.score}</b>${p.upset ? ` (${p.layout} + ${p.upset} upset bonus)` : ''}: the best score possible on this layout with full knowledge. ${verdict}`
+        + (p.line ? `<details style="margin-top:4px"><summary class="muted">Par line</summary><div class="log">${esc(p.line.join(' → '))}</div></details>` : '');
+    }
+    if (res.reveal) {
+      $('eGlyphs').innerHTML = res.reveal.glyphKey.map((l) => esc(Sim.glyphText(l))).join('\n');
+      $('eLayout').innerHTML = [...res.reveal.traps.map((x) => `trap  ${x}`), ...res.reveal.wiring.map((w) => `wire  ${w}`), ...(res.reveal.marks || []).map((m) => `mark  ${m}`)].map(esc).join('\n') || 'No predecessor traps.';
+    }
+    $('eLog').innerHTML = (res.log || []).map((l) => `<div class="${/\(hidden\)$/.test(l) ? 'hidden' : ''} ${/springs|catches|drains/.test(l) ? 'spring' : ''}">${esc(l)}</div>`).join('');
+    $('eVerify').textContent = 'The server ran every action and scored the run; the page never held the layout.';
+    const invite = res.chain && res.status === 'saved' ? `${location.origin}${location.pathname}?chain=${res.chain}` : null;
+    $('eSaved').innerHTML = res.status === 'practiced' ? '<span class="muted">Practice runs are not handed on.</span>'
+      : invite ? `Your run is on the chain. Invite someone to run it next: <code>${esc(invite)}</code>` : '';
+    $('bHotseat').classList.toggle('hide', !invite);
+    $('bHotseat').onclick = () => { location.href = `${location.pathname}?chain=${res.chain}`; };
+    $('end').classList.remove('hide');
+  }
+  $('bHome').onclick = () => { location.href = location.pathname; };
+
+  // ---------- watch ----------
+  let wf = [], wi = 0, wTimer = null, wRedact = false;
+  async function openWatch(id, redact, title, note) {
+    try {
+      wf = (await api(`api/run/${id}/watch${redact ? '?redact=1' : ''}`)).frames;
+      await loadSeed(wf[0].state.seedId);
+    } catch (e) { alert(`Could not replay that run: ${e.message}`); return; }
+    wi = 0; wRedact = redact;
+    $('wTitle').textContent = `Watching ${title}`;
+    $('wNote').textContent = note;
+    $('watch').classList.remove('hide');
+    drawWatch();
+  }
+  function drawWatch() {
+    const f = wf[wi], st = f.state;
+    $('wMap').innerHTML = mapSVG(st, Sim.runnerView(st), { truth: true, redact: wRedact });
+    $('wStep').textContent = `Step ${wi}/${wf.length - 1}: ${f.action}`;
+    // In redacted mode loot is hidden too: a drop in loot would give away where a trap was placed.
+    $('wStats').innerHTML = `<span>Turn <b>${st.turn}</b></span><span>HP <b>${st.hp}</b></span><span>Supplies <b>${st.supplies}</b></span><span>Loot <b>${wRedact ? 'hidden' : st.loot}</b></span>`
+      + (st.over ? `<span>Outcome <b>${st.outcome}</b>, score <b>${Sim.score(st).total}</b></span>` : '');
+    const lines = [];
+    wf.slice(1, wi + 1).forEach((fr, k) => {
+      for (const e of fr.events) {
+        const txt = `[t${e.turn}] ${e.reveal || e.text}${e.visible ? '' : '  (hidden from the runner)'}`;
+        const cls = [k + 1 === wi ? 'now' : '', e.visible ? '' : 'hidden', e.kind === 'spring' ? 'spring' : ''].join(' ');
+        lines.push(`<div class="${cls}">${esc(txt)}</div>`);
+      }
+    });
+    $('wEvents').innerHTML = lines.join('');
+    $('wEvents').scrollTop = 1e6;
+  }
+  const wGo = (i) => { wi = Math.max(0, Math.min(wf.length - 1, i)); drawWatch(); };
+  const wStop = () => { clearInterval(wTimer); wTimer = null; $('wPlay').textContent = '▶ Play'; };
+  $('wFirst').onclick = () => { wStop(); wGo(0); };
+  $('wPrev').onclick = () => { wStop(); wGo(wi - 1); };
+  $('wNext').onclick = () => { wStop(); wGo(wi + 1); };
+  $('wLast').onclick = () => { wStop(); wGo(wf.length - 1); };
+  $('wPlay').onclick = () => {
+    if (wTimer) return wStop();
+    if (wi >= wf.length - 1) wGo(0);
+    $('wPlay').textContent = '❚❚ Pause';
+    wTimer = setInterval(() => { if (wi >= wf.length - 1) wStop(); else wGo(wi + 1); }, 900);
+  };
+  $('wClose').onclick = () => { wStop(); $('watch').classList.add('hide'); };
+
+  function esc(t) { return String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+  loadSetup();
+})();
+</script>
+</body>
+</html>

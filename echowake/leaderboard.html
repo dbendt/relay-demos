@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Echowake · Leaderboards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="console.css">
+<style>
+  .scene-art { background-position: center 25%; }
+  .scene-shade { background: linear-gradient(180deg, rgba(12,11,9,.7) 0%, rgba(12,11,9,.88) 35%, rgba(12,11,9,.96) 100%); }
+  .wrap { padding: 4px 32px 32px; display: flex; flex-direction: column; gap: 18px; }
+  .headrow { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; }
+  .seg { display: flex; gap: 6px; }
+  .seg button { padding: 7px 12px; background: rgba(0,0,0,.4); color: var(--paper); border: 1px solid var(--line); border-radius: 3px; cursor: pointer; font: 600 11px var(--mono); letter-spacing: .1em; }
+  .seg button.on { background: var(--paper); color: var(--ink); border-color: var(--paper); }
+  .you { padding: 7px 12px; font: 12px var(--sans); color: var(--dim); display: flex; align-items: center; gap: 8px; }
+  .you .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 8px var(--teal); }
+  .you b { color: var(--paper); font-weight: 600; }
+  .maps { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .board { padding: 0 0 8px; overflow: hidden; }
+  .board .bh { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); background-size: cover; background-position: center 40%; position: relative; }
+  .board .bh::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(12,11,9,.55), rgba(12,11,9,.85)); }
+  .board .bh > * { position: relative; }
+  .board h3 { margin: 0; font: 400 22px/1 var(--serif); color: var(--paper-bright); }
+  .board .rows { padding: 8px 14px 0; }
+  .board .gap { text-align: center; color: var(--faint); font: 11px var(--mono); padding: 2px 0; }
+  .facl { font: 600 10px var(--mono); margin-right: 8px; }
+  .lower { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 14px; }
+  .lower .panel { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .lower .ph { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .lower h3 { margin: 0; font: 400 20px/1 var(--serif); }
+  .share { display: flex; height: 8px; border-radius: 2px; overflow: hidden; gap: 2px; }
+  .share div { height: 100%; }
+  .facrow { display: grid; grid-template-columns: 20px 1fr auto auto; gap: 10px; align-items: center; font: 13px var(--sans); }
+  .facrow .sw { width: 9px; height: 9px; border-radius: 1px; align-self: center; }
+  .facrow .n { font: 11px var(--mono); color: var(--faint); }
+  .facrow .v { font: 600 12px var(--mono); }
+  .sab h3 { color: var(--amber); } .sab { border-color: var(--amber-glow) !important; }
+  .ben h3 { color: var(--teal); } .ben { border-color: var(--teal-glow) !important; }
+  .empty { font: 12px var(--sans); color: var(--faint); padding: 6px 0; }
+  @media (max-width: 900px) { .wrap { padding: 4px 16px 20px; } .lower { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="scene-art" id="art"></div>
+  <div class="scene-shade"></div>
+  <div class="scene-body">
+    <div class="topbar">
+      <div class="group"><a class="label" href="lobby.html" style="text-decoration:none">← Lobby</a><a href="lobby.html"><img class="logo" src="assets/echowake-logo.png" alt="Echowake"></a><span class="label accent">Leaderboards</span><span class="label" id="periodLabel"></span></div>
+      <div class="group"><div class="seg" id="tiers"></div><div class="seg" id="spans"></div></div>
+    </div>
+    <div class="wrap">
+      <div class="headrow">
+        <h1 class="title">Who the boards <em>remember.</em></h1>
+        <div class="panel you hide" id="you"></div>
+      </div>
+      <div class="maps" id="maps"></div>
+      <div class="lower">
+        <div class="panel" id="factions"></div>
+        <div class="panel sab" id="sab"></div>
+        <div class="panel ben" id="ben"></div>
+      </div>
+      <div class="muted" style="font:12px/1.5 var(--sans)" id="foot"></div>
+      <div class="err" id="err"></div>
+    </div>
+  </div>
+</div>
+
+<script src="echowake-api.js"></script>
+<script src="sim.js"></script>
+<script src="console.js"></script>
+<script>
+(() => {
+  const { Sim, esc, $, store, api, ART, fac: facName, facIcon } = Console;
+  const me = (store.get('trap-relay-name') || '').toLowerCase();
+  let ix = null, tier = Number(store.get('trap-relay-tier')) || 1, span = 'period';
+  const FC = { wardens: 'var(--wardens)', unravelers: 'var(--unravelers)', mirrors: 'var(--mirrors)' };
+  const live = () => Object.entries(Sim.MAPS).filter(([, m]) => m.status === 'live');
+  $('art').style.backgroundImage = `url(${ART(store.get('trap-relay-map') || 'silkroad', 'gate')})`;
+
+  const periods = () => Object.keys(ix.periods).sort();
+  const lastPeriod = () => { const ps = periods(); const i = ps.indexOf(ix.period); return i > 0 ? ps[i - 1] : null; };
+  const inSpan = (p) => (span === 'all' ? true : p === (span === 'period' ? ix.period : lastPeriod()));
+  const spanName = () => (span === 'all' ? 'all time' : span === 'period' ? `period ${ix.period}` : lastPeriod() ? `period ${lastPeriod()}` : 'last period');
+
+  // Best ranked escape per runner, as the leader boards count it.
+  function bests(rows) {
+    const best = {};
+    for (const r of rows.filter((x) => x.ranked && x.outcome === 'escaped')) if (!best[r.runner] || r.score > best[r.runner].score) best[r.runner] = r;
+    return Object.values(best).sort((a, b) => b.score - a.score || a.saved - b.saved);
+  }
+  const facTag = (f) => (f ? `<span class="facl">${facIcon(f, 16)}</span>` : '<span class="facl" style="display:inline-block;width:20px"></span>');
+  function rowsHTML(list, val, cls) {
+    if (!list.length) return '<div class="empty">Nobody yet.</div>';
+    const mineAt = list.findIndex((x) => x.name === me);
+    const shown = list.slice(0, 5).map((x, i) => [x, i]);
+    if (mineAt >= 5) shown.push(null, [list[mineAt], mineAt]);
+    return shown.map((e) => (e === null ? '<div class="gap">···</div>'
+      : `<div class="board-row ${e[0].name === me ? `you ${cls || ''}` : ''}"><span class="rank">${e[1] + 1}</span><span>${e[0].faction !== undefined ? facTag(e[0].faction) : ''}${esc(e[0].name === me ? `${e[0].name} (you)` : e[0].name)}</span><span class="pts">${val(e[0])}</span></div>`)).join('');
+  }
+
+  async function load() {
+    try { ix = await api(`api/index?runner=${encodeURIComponent(me)}`); } catch (e) { $('err').textContent = e.message; return; }
+    render();
+  }
+
+  function render() {
+    $('periodLabel').textContent = `Period ${ix.period}`;
+    $('tiers').innerHTML = Object.entries(Sim.TIERS).map(([k, t]) => `<button class="${Number(k) === tier ? 'on' : ''}" data-tier="${k}">${esc(t.label.toUpperCase())}</button>`).join('');
+    $('spans').innerHTML = [['period', 'THIS PERIOD'], ['last', 'LAST PERIOD'], ['all', 'ALL TIME']].map(([k, l]) => `<button class="${k === span ? 'on' : ''}" data-span="${k}" ${k === 'last' && !lastPeriod() ? 'disabled' : ''}>${l}</button>`).join('');
+    for (const b of document.querySelectorAll('[data-tier]')) b.onclick = () => { tier = Number(b.dataset.tier); store.set('trap-relay-tier', tier); render(); };
+    for (const b of document.querySelectorAll('[data-span]')) b.onclick = () => { span = b.dataset.span; render(); };
+
+    const rows = ix.runs.filter((r) => r.tier === tier && inSpan(r.period));
+
+    // One board per live map.
+    $('maps').innerHTML = live().map(([id, m]) => {
+      const list = bests(rows.filter((r) => r.map === id)).map((r) => ({ name: r.runner, faction: r.faction, score: r.score }));
+      return `<div class="panel board"><div class="bh" style="background-image:url(${ART(id, 'gate')})"><h3>${esc(m.name.replace(/^The /, ''))}</h3><span class="label accent">${esc(m.year)}${list.length ? ` · BEST ${list[0].score}` : ''}</span></div>
+        <div class="rows">${rowsHTML(list, (x) => x.score)}</div></div>`;
+    }).join('');
+
+    // You: best run in the span on this tier, and your place on that map's board.
+    const myBest = bests(rows).find((r) => r.runner === me);
+    $('you').classList.toggle('hide', !me);
+    if (me) {
+      const place = myBest ? bests(rows.filter((r) => r.map === myBest.map)).findIndex((r) => r.runner === me) + 1 : 0;
+      $('you').innerHTML = `<span class="dot"></span><b>${esc(me)}</b>${myBest && myBest.faction ? ` · ${facName(myBest.faction)}` : ''} · ${myBest ? `best run ${myBest.score} on ${esc(Sim.MAPS[myBest.map].name.replace(/^The /, ''))} · #${place} there` : `no ranked escape (${esc(spanName())})`}`;
+    }
+
+    // Factions: runners per faction (the bar) and the mean of each member's best score minus par.
+    const fb = {};
+    for (const r of rows.filter((x) => x.ranked && x.faction)) {
+      const k = `${r.faction}/${r.runner}`;
+      if (r.vsPar !== null && (!(k in fb) || fb[k] === null || r.vsPar > fb[k])) fb[k] = r.vsPar;
+      else if (!(k in fb)) fb[k] = null;
+    }
+    const fac = Object.keys(Sim.FACTIONS).map((f) => {
+      const vs = Object.entries(fb).filter(([k]) => k.startsWith(`${f}/`)).map(([, v]) => v);
+      const nums = vs.filter((v) => v !== null);
+      return { f, runners: vs.length, vsPar: nums.length ? Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10 : null };
+    }).sort((a, b) => (b.vsPar ?? -1e9) - (a.vsPar ?? -1e9));
+    const total = fac.reduce((a, x) => a + x.runners, 0);
+    $('factions').innerHTML = `<div class="ph"><h3>Faction standings</h3><span class="label">Mean best vs par</span></div>
+      <div class="share">${total ? fac.filter((x) => x.runners).map((x) => `<div style="width:${(x.runners / total) * 100}%;background:${FC[x.f]}"></div>`).join('') : '<div style="width:100%;background:rgba(255,255,255,.1)"></div>'}</div>
+      ${fac.map((x) => `<div class="facrow">${facIcon(x.f, 20)}<span>${esc(Sim.FACTIONS[x.f].label)}</span><span class="n">${x.runners} runner${x.runners === 1 ? '' : 's'}</span><span class="v">${x.vsPar === null ? '–' : (x.vsPar > 0 ? '+' : '') + x.vsPar}</span></div>`).join('')}`;
+
+    // Designers: saboteur and benefactor points, summed over the span's periods (already capped per pair).
+    const pts = {};
+    for (const p of periods().filter(inSpan)) {
+      const t = ix.periods[p][tier];
+      if (!t) continue;
+      for (const d of t.saboteurs.concat(t.benefactors)) {
+        const x = pts[d.name] || (pts[d.name] = { name: d.name, sab: 0, ben: 0, seen: new Set() });
+        if (x.seen.has(p)) continue;
+        x.seen.add(p); x.sab += d.saboteur; x.ben += d.benefactor;
+      }
+    }
+    const all = Object.values(pts).filter((x) => x.name !== 'stand-in');
+    const sab = all.filter((x) => x.sab > 0).sort((a, b) => b.sab - a.sab);
+    const ben = all.filter((x) => x.ben > 0).sort((a, b) => b.ben - a.ben);
+    $('sab').innerHTML = `<div class="ph"><h3>Top saboteurs</h3><span class="label">Harm points</span></div>${rowsHTML(sab, (x) => x.sab, 'amber')}`;
+    $('ben').innerHTML = `<div class="ph"><h3>Top benefactors</h3><span class="label">Aid points</span></div>${rowsHTML(ben, (x) => x.ben)}`;
+
+    $('foot').textContent = `${Sim.TIERS[tier].label} tier, ${spanName()}. Map boards count each runner's best ranked escape. Designer points are capped at 8 per runner and author pair each period. Runs under different rules versions sit on slightly different scales.`;
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>

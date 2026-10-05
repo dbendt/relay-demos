@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relay Golf · Prototype</title>
+<style>
+  :root {
+    --bg: #0f1a12; --panel: #17251a; --line: #2c4331; --text: #eef2e8; --dim: #a9b8a5; --faint: #77887a;
+    --fair: #5fa34f; --rough: #2f6a32; --thick: #1f4a24; --sand: #d9c58a; --water: #3f7fc4; --tree: #1d3f22; --green: #7fd36a; --hill: #8a6a43; --unknown: #3a4a3e;
+    --accent: #f2d36b; --harm: #e0705a; --boon: #6fd0c8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font: 600 18px Georgia, serif; letter-spacing: .02em; }
+  header .meta { color: var(--dim); font-size: 13px; }
+  header input { width: 110px; }
+  .dev { display: inline-flex; gap: 6px; align-items: center; padding: 2px 6px; border: 1px dashed var(--accent); border-radius: 4px; color: var(--accent); font-size: 12px; }
+  .dev button { padding: 2px 6px; font-size: 12px; }
+  input, select, button { font: inherit; color: var(--text); background: #0c140e; border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button.poor { border-color: var(--harm); color: #e9b3a8; }
+  button.on { background: var(--accent); color: #17200f; border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  main { display: grid; grid-template-columns: auto minmax(280px, 420px); gap: 18px; padding: 16px 18px; align-items: start; }
+  .board { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+  svg { display: block; }
+  .side { display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+  .card h2 { margin: 0 0 6px; font: 600 12px system-ui; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .muted { color: var(--dim); font-size: 13px; }
+  .log { max-height: 180px; overflow: auto; font-size: 13px; color: var(--dim); }
+  .log div { padding: 1px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  td, th { padding: 3px 6px; text-align: left; border-bottom: 1px solid var(--line); }
+  th { color: var(--faint); font-weight: 500; }
+  .err { color: var(--harm); font-size: 13px; min-height: 1em; }
+  .big { font: 600 22px Georgia, serif; }
+  .feat { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+  .feat:hover { border-color: var(--accent); }
+  .feat.on { border-color: var(--accent); background: #232f18; }
+  .feat small { grid-column: 1 / -1; color: var(--dim); }
+  .tag { font-size: 11px; padding: 0 5px; border-radius: 3px; }
+  .tag.harm { background: rgba(224,112,90,.2); color: var(--harm); } .tag.boon { background: rgba(111,208,200,.18); color: var(--boon); } .tag.bluff, .tag.either { background: rgba(242,211,107,.15); color: var(--accent); }
+  .meter { position: relative; height: 26px; margin-top: 8px; border-radius: 4px; overflow: hidden; border: 1px solid var(--line);
+    background: linear-gradient(90deg, #6b2a20 0 20%, #8a6a1e 20% 40%, #3f7a32 40% 60%, #8a6a1e 60% 80%, #6b2a20 80% 100%); }
+  .meter .tick { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: #fff; box-shadow: 0 0 4px #000; }
+  .meter .lbl { position: absolute; top: 5px; font-size: 11px; color: rgba(255,255,255,.75); pointer-events: none; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Relay Golf</h1>
+  <span class="meta">Prototype · a hot-seat chain on this browser</span>
+  <span class="meta" id="day"></span>
+  <label class="meta">Course <input id="course" type="number" min="1" value="1"></label>
+  <label class="meta">Golfer <input id="golfer" placeholder="your name"></label>
+  <button id="start">Tee off</button>
+  <button id="reset" title="Clear this course's chain on this browser">Reset chain</button>
+</header>
+<main>
+  <div class="board"><svg id="svg"></svg></div>
+  <div class="side">
+    <div class="card" id="status"></div>
+    <div class="card" id="controls"></div>
+    <div class="card"><h2>Shot log</h2><div class="log" id="log"></div></div>
+    <div class="card" id="chain"></div>
+  </div>
+</main>
+<script src="golf-sim.js"></script>
+<script>
+(() => {
+  const G = RelayGolf;
+  const $ = (id) => document.getElementById(id);
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const TILE = 14, HALF = TILE / 2; // pixels per tile on the map
+  const COLOR = { F: 'var(--fair)', R: 'var(--rough)', K: 'var(--thick)', S: 'var(--sand)', W: 'var(--water)', T: 'var(--rough)', G: 'var(--green)', M: 'var(--hill)', P: 'var(--rough)', '?': 'var(--unknown)' };
+  const LIFETIME = 6; // a feature lasts this many golfers (raised from 3 on 4 October 2026)
+
+  // ---------- the chain on this browser ----------
+  const chainKey = (id) => `relay-golf:chain:${id}`;
+  // Chains saved by earlier versions of the prototype: a wind gate became Wind (a cone, same direction); anything
+  // else unknown is dropped so the page never breaks on it.
+  const RENAMED = { windgate: 'wind' };
+  function migrate(chain) {
+    chain.features = (chain.features || []).map((f) => (RENAMED[f.kind] ? { ...f, kind: RENAMED[f.kind] } : f)).filter((f) => G.FEATURES[f.kind] && !(f.kind === 'backstop' && f.side == null));
+    return chain;
+  }
+  const loadChain = (id) => { try { return migrate(JSON.parse(localStorage.getItem(chainKey(id))) || { features: [], golfers: [], next: 1 }); } catch (e) { return { features: [], golfers: [], next: 1 }; } };
+  const saveChain = () => { try { localStorage.setItem(chainKey(courseId), JSON.stringify(chain)); } catch (e) { /* storage blocked */ } };
+
+  let courseId = null, course = null, chain = null, round = null, mode = 'play', club = 'driver', putt = 2, scouting = false;
+  let swing = 'full'; // Full or ¾ swing for full clubs
+  let shotShape = ''; // '', 'draw' or 'fade' for clubs that can be shaped
+  let sSpin = ''; // a chip's spin on the short map: '', 'back' or 'top'
+  let sel = null; // the selected shot ('d<dir>' or 'cup'): previewed with its possible next shots, played on a second click
+  let shape = null; // { kind, hole, dir, picks: [feature|null x 3] } while shaping the course: one pick per hole
+  const features = () => chain.features; // what this golfer faces
+
+  // ---------- the day ----------
+  // Course N is the course of day N. Days turn over at 08:00 UTC, as in Echowake, counted from 1 October 2026 (day 1).
+  // Today's course takes rounds on its chain; a closed day's chain is read-only and unsealed (every hidden ramp, hill
+  // and the best line shown), and a round there is unsaved practice; a future course can't be played yet.
+  // DEV (on localhost): Next day jumps the clock to one minute past the next reset; Real time clears the offset. The
+  // offset lives in this browser (relay-golf:dev-offset).
+  const DAY_MS = 86400000, DAY_ONE = Date.UTC(2026, 9, 1, 8);
+  const devOffset = () => { try { return Number(localStorage.getItem('relay-golf:dev-offset')) || 0; } catch (e) { return 0; } };
+  const clockNow = () => Date.now() + devOffset();
+  const today = () => Math.max(1, Math.floor((clockNow() - DAY_ONE) / DAY_MS) + 1);
+  const isDev = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  function renderDay() {
+    const d = today(), shown = new Date(clockNow()).toISOString().slice(0, 16).replace('T', ' ');
+    $('day').innerHTML = `Day ${d} · today's course: ${d}${isDev ? ` <span class="dev">DEV · ${shown} UTC <button id="nextday">Next day</button><button id="realtime" ${devOffset() ? '' : 'disabled'}>Real time</button></span>` : ''}`;
+    if ($('nextday')) $('nextday').onclick = () => {
+      const now = clockNow(), next = DAY_ONE + Math.ceil((now - DAY_ONE + 1) / DAY_MS) * DAY_MS + 60000;
+      try { localStorage.setItem('relay-golf:dev-offset', String(devOffset() + (next - now))); } catch (e) { /* storage blocked */ }
+      afterClockChange();
+    };
+    if ($('realtime')) $('realtime').onclick = () => { try { localStorage.removeItem('relay-golf:dev-offset'); } catch (e) { /* */ } afterClockChange(); };
+  }
+  function afterClockChange() {
+    $('course').value = today();
+    if (round && !practice && courseNum() < today()) { round = null; } // the day closed under an open round: it's gone
+    renderDay(); render();
+  }
+  const courseNum = () => Math.max(1, Number($('course').value) || 1);
+  let practice = false, showLine = false;
+  $('course').value = today();
+  renderDay();
+
+  $('golfer').value = localStorage.getItem('relay-golf:name') || '';
+  $('start').onclick = () => {
+    const n = courseNum();
+    if (n > today()) { alert(`Course ${n} opens on day ${n}. Today is day ${today()}.`); return; }
+    practice = n < today();
+    showLine = false;
+    courseId = `links#${n}`;
+    course = G.getCourse(courseId);
+    chain = loadChain(courseId);
+    const name = ($('golfer').value || '').trim() || `golfer ${chain.golfers.length + 1}`;
+    localStorage.setItem('relay-golf:name', name);
+    round = G.newRound(courseId, features(), name);
+    mode = 'play'; scouting = false; club = ''; sel = null; swing = 'full';
+    shape = { kind: 'bunker', hole: 0, dir: 0, shapes: { bunker: 'pot', water: 'creek', ramp: 'single', trees: 'single', bank: 'short' }, picks: [null, null, null] }; // this golfer's picks, held until the round is saved
+    render();
+  };
+  $('reset').onclick = () => {
+    const id = `links#${Math.max(1, Number($('course').value) || 1)}`;
+    if (!confirm(`Clear the chain for ${id} on this browser?`)) return;
+    localStorage.removeItem(chainKey(id));
+    round = null; render();
+  };
+
+  // ---------- drawing ----------
+  let selText = '';
+  let animating = false, animHole = 0;
+  let viewY0 = 0, viewX0 = 0; // the first row and column of the long map on screen
+  function draw() {
+    selText = '';
+    if (round && mode === 'play' && round.phase === 'short' && !animating) return drawShort();
+    // While a long shot is being animated, the hole it was played on (the round may already be on the short map, or
+    // the next hole).
+    const h = round ? (animating ? animHole : mode === 'shape' ? shape.hole : Math.min(round.hole, 2)) : 0;
+    const hole = course.holes[h];
+    const picks = mode === 'shape' ? shape.picks.filter(Boolean) : [];
+    const on = G.featuresOn(features().concat(picks), h);
+    const known = new Set(round.known);
+    if (practice) for (const f of G.withSeed(hole, on)) known.add(f.id); // a closed day is unsealed
+    const ball = mode === 'play' && round.hole === h ? round.ball : null;
+    // While shaping, show the hole plainly (the designer sees everything) plus the feature being placed.
+    const v = mode === 'shape' ? G.viewOf(hole, on, new Set(on.map((f) => f.id)), null) : G.viewOf(hole, on, known, ball);
+    // Show only the hole's own rows: from just above the short-game area (or the highest bend) down to the tee.
+    // and the hole's own columns: its tee, bends and cup, with the short-game area's width either side of them.
+    viewY0 = Math.max(0, Math.min(hole.cup[1] - G.ZONE_R - 2, ...(hole.bends || []).map((b) => b[1] - 3)));
+    const xs = [hole.tee[0], hole.cup[0]].concat((hole.bends || []).map((b) => b[0]));
+    viewX0 = Math.max(0, Math.min(...xs) - G.ZONE_R - 1);
+    const viewX1 = Math.min(G.W - 1, Math.max(...xs) + G.ZONE_R + 1);
+    const W = (viewX1 - viewX0 + 1) * TILE, H = (G.H - viewY0) * TILE;
+    let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="${viewX0 * TILE} ${viewY0 * TILE} ${W} ${H}">`;
+    for (let y = 0; y < G.H; y++) for (let x = 0; x < G.W; x++) {
+      const t = v.grid[y][x];
+      s += `<rect x="${x * TILE}" y="${y * TILE}" width="${TILE}" height="${TILE}" fill="${COLOR[t] || 'var(--rough)'}" data-x="${x}" data-y="${y}"/>`;
+      if (t === 'T') s += `<circle cx="${x * TILE + HALF}" cy="${y * TILE + HALF}" r="7" fill="var(--tree)" stroke="#0b200f"/>`;
+      // Planted trees: a lighter canopy with a dashed edge, since a ball can sit underneath.
+      if (t === 'P') s += `<circle cx="${x * TILE + HALF}" cy="${y * TILE + HALF}" r="6" fill="#3d6b33" stroke="#b9e09a" stroke-dasharray="2 2"><title>Planted trees: a ball can drop under them and punch out</title></circle>`;
+      if (t === 'M') s += `<path d="M${x * TILE + 1} ${y * TILE + 16} Q${x * TILE + HALF} ${y * TILE - 2} ${x * TILE + 17} ${y * TILE + 16}Z" fill="#a8844f"/>`;
+      if (t === '?') s += `<text x="${x * TILE + HALF}" y="${y * TILE + HALF + 4}" text-anchor="middle" font-size="11" fill="#9aa89c">?</text>`;
+    }
+    s += `<defs><marker id="windhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6,3 L0,6 Z" fill="#d9ecff"/></marker></defs>`;
+    // Tee, cup, wind.
+    s += `<rect x="${hole.tee[0] * TILE + 4}" y="${hole.tee[1] * TILE + 4}" width="10" height="10" fill="#fff" opacity=".85"/>`;
+    s += `<circle cx="${hole.cup[0] * TILE + HALF}" cy="${hole.cup[1] * TILE + HALF}" r="4" fill="#111"/><path d="M${hole.cup[0] * TILE + HALF} ${hole.cup[1] * TILE + HALF} V${hole.cup[1] * TILE - 8} l9 4 -9 4" fill="var(--harm)" stroke="#fff" stroke-width="1"/>`;
+    // The short-game area: a ball that stops inside it moves to the short game.
+    s += `<circle cx="${hole.cup[0] * TILE + HALF}" cy="${hole.cup[1] * TILE + HALF}" r="${G.ZONE_R * TILE}" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="1.2" stroke-dasharray="4 4" pointer-events="none"><title>The short-game area: a ball that stops inside moves to the short game</title></circle>`;
+    // Features.
+    for (const f of v.features) {
+      const cx = f.x * TILE + HALF, cy = f.y * TILE + HALF;
+      if (f.kind === 'wind') {
+        // The cone the gust covers, with streaks across it showing which way it blows: a ball flying through any of it
+        // is carried that way.
+        const [ux, uy] = G.ORIENT[f.dir], ul = Math.hypot(ux, uy), sx = (ux / ul) * TILE * 0.38, sy = (uy / ul) * TILE * 0.38;
+        s += `<g pointer-events="none"><title>Wind: a ball flying through this cone is carried ${G.ARROWS[f.dir]}</title>`;
+        s += G.windCone(f).map(([tx, ty]) => `<rect x="${tx * TILE}" y="${ty * TILE}" width="${TILE}" height="${TILE}" fill="rgba(120,180,255,.2)"/>`).join('');
+        s += G.windCone(f).filter(([tx, ty]) => (tx + ty) % 2 === 0).map(([tx, ty]) => { const mx = tx * TILE + HALF, my = ty * TILE + HALF; return `<path d="M${mx - sx} ${my - sy} L${mx + sx} ${my + sy}" stroke="#d9ecff" stroke-width="1.6" stroke-linecap="round" marker-end="url(#windhead)"/>`; }).join('');
+        s += `</g>`;
+      }
+      if (f.kind === 'ramp') {
+        // A slope: playable ground, drawn as lighter tiles with its fall line (or ? until scouted).
+        for (const [tx, ty] of G.footprint(f)) {
+          s += `<rect class="feature" data-id="${f.id}" x="${tx * TILE}" y="${ty * TILE}" width="${TILE}" height="${TILE}" fill="rgba(255,240,170,.35)" stroke="${scouting ? 'var(--accent)' : 'rgba(255,240,170,.8)'}" stroke-dasharray="2 2"/><text x="${tx * TILE + HALF}" y="${ty * TILE + HALF + 4}" text-anchor="middle" font-size="11" font-weight="700" fill="#4a3d10" pointer-events="none">${f.dir === null ? '?' : G.ARROWS[f.dir]}</text>`;
+        }
+      }
+      if (f.kind === 'bank') s += G.footprint(f).map(([tx, ty]) => `<rect x="${tx * TILE + 1}" y="${ty * TILE + 3}" width="${TILE - 2}" height="${TILE - 6}" rx="3" fill="#8f8a4a" stroke="#d8d28f" stroke-width="1.2" pointer-events="none"><title>Fairway bank: a shot aimed at the fairway that would finish beyond it is held on the fairway</title></rect>`).join('');
+      if (f.kind === 'backstop') s += G.footprint(f).map(([tx, ty]) => `<rect x="${tx * TILE + 1}" y="${ty * TILE + 1}" width="${TILE - 2}" height="${TILE - 2}" rx="3" fill="#a07a44" stroke="#e7c98f" stroke-width="1.5" pointer-events="none"><title>Backstop: a shot aimed at the green that would leave it on this side stops here</title></rect>`).join('');
+      if (f.kind === 'calm') s += `<rect x="${(f.x - 1) * TILE}" y="${(f.y - 1) * TILE}" width="${TILE * 3}" height="${TILE * 3}" fill="none" stroke="var(--boon)" stroke-dasharray="3 3"/>`;
+      if (f.kind === 'hill' || f.kind === 'bunker' || f.kind === 'water') s += `<rect class="feature" data-id="${f.id}" x="${f.x * TILE}" y="${f.y * TILE}" width="${TILE}" height="${TILE}" fill="transparent" stroke="${scouting ? 'var(--accent)' : 'none'}"/>`;
+    }
+    // Ball and shot previews (not while a shot is being animated: the animation draws the ball).
+    if (ball && !animating) {
+      s += `<circle cx="${ball[0] * TILE + HALF}" cy="${ball[1] * TILE + HALF}" r="5" fill="#fff" stroke="#111"/>`;
+      if (!scouting) {
+        const L = G.believedLayout(hole, on, known, ball);
+        const seen = new Set();
+        let picked = null; // the selected shot and where it lands
+        for (const dir of G.aimDirs(L, ball)) {
+          const a = club === 'putter' ? { club, dir, dist: putt } : { club, dir, swing, ...(shotShape && G.CURVE[club] ? { shape: shotShape } : {}) };
+          const tr = {}, r = G.shot(L, ball, a, tr);
+          const k = `${r.pos[0]},${r.pos[1]},${r.holed}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          const on = sel === `d${dir}`;
+          if (on) picked = { a, r };
+          const px = r.pos[0] * TILE + HALF, py = r.pos[1] * TILE + HALF;
+          if (a.shape && tr.target) {
+            // A shaped flight: a curve from the ball, along the line it's aimed down, bending to where it lands; then the run.
+            const E0 = [tr.target[0] - tr.drift[0], tr.target[1] - tr.drift[1]], land = tr.land || tr.target;
+            const bx = ball[0] * TILE + HALF, by = ball[1] * TILE + HALF, cx = ((ball[0] + E0[0]) / 2) * TILE + HALF, cy = ((ball[1] + E0[1]) / 2) * TILE + HALF;
+            s += `<path d="M${bx} ${by} Q${cx} ${cy} ${land[0] * TILE + HALF} ${land[1] * TILE + HALF} L${px} ${py}" fill="none" stroke="${on ? 'var(--accent)' : 'rgba(255,255,255,.12)'}" stroke-width="${on ? 2 : 1}"/>`;
+          } else s += `<line x1="${ball[0] * TILE + HALF}" y1="${ball[1] * TILE + HALF}" x2="${px}" y2="${py}" stroke="${on ? 'var(--accent)' : 'rgba(255,255,255,.12)'}" stroke-width="${on ? 2 : 1}"/>`;
+          s += `<circle class="aim" data-dir="${dir}" cx="${px}" cy="${py}" r="${on ? 8 : 6}" fill="${r.holed ? 'var(--accent)' : r.penalty ? 'var(--harm)' : 'rgba(255,255,255,.35)'}" stroke="${on ? 'var(--accent)' : '#fff'}" stroke-width="${on ? 3 : 1}"><title>${esc(G.describeShot(a, r))}</title></circle>`;
+        }
+        // With the putter: click the cup itself to putt straight at it. From inside the ring it drops; from outside,
+        // the ball stops beside the cup, shown by a dashed line to where it ends.
+        if (club === 'putter' && L.grid[ball[1]][ball[0]] === 'G') { // not from a hill: the line to the hole is unplayable there
+          const a = { club: 'putter', toCup: true, dir: 0 };
+          const r = G.shot(L, ball, a);
+          const cx = hole.cup[0] * TILE + HALF, cy = hole.cup[1] * TILE + HALF;
+          s += `<line x1="${ball[0] * TILE + HALF}" y1="${ball[1] * TILE + HALF}" x2="${cx}" y2="${cy}" stroke="var(--accent)" stroke-opacity=".6"/>`;
+          if (!r.holed) s += `<circle cx="${r.pos[0] * TILE + HALF}" cy="${r.pos[1] * TILE + HALF}" r="4" fill="none" stroke="var(--accent)" stroke-dasharray="2 2" pointer-events="none"/>`;
+          if (sel === 'cup') picked = { a, r };
+          s += `<circle class="aim" data-tocup="1" cx="${cx}" cy="${cy}" r="${sel === 'cup' ? 10 : 8}" fill="${r.holed ? 'var(--accent)' : 'rgba(242,211,107,.25)'}" stroke="var(--accent)" stroke-width="${sel === 'cup' ? 3 : 2}"><title>${r.holed ? 'Putt at the cup: in the hole!' : r.events.includes('lag') ? 'Putt at the cup: it stops beside the cup (putts drop only from inside the ring)' : esc(G.describeShot({ ...a, dir: 0 }, r).replace(/ →/, ''))}</title></circle>`;
+        }
+        // The next possible shots from where the selected shot lands (every legal club and swing that gets closer to the
+        // cup; putts straight at it), as dashed lines, so a route can be read ahead before committing to the first shot.
+        // Where the selected shot goes if mistimed: pulled left (early) or pushed right (late), 1 or 2 tiles off line.
+        if (picked && picked.a.club !== 'putter') {
+          const seenMiss = new Set([`${picked.r.pos[0]},${picked.r.pos[1]}`]);
+          for (const [tm, name] of [[-0.8, 'Very early'], [-0.4, 'Early'], [0.4, 'Late'], [0.8, 'Very late']]) {
+            const r = G.shot(L, ball, { ...picked.a, timing: tm });
+            const k = `${r.pos[0]},${r.pos[1]}`;
+            if (seenMiss.has(k) && !r.penalty) continue;
+            seenMiss.add(k);
+            const mx = r.pos[0] * TILE + HALF, my = r.pos[1] * TILE + HALF, col = r.penalty ? 'var(--harm)' : '#f2b25a';
+            s += `<path d="M${mx - 4} ${my - 4} L${mx + 4} ${my + 4} M${mx + 4} ${my - 4} L${mx - 4} ${my + 4}" stroke="${col}" stroke-width="2" pointer-events="visibleStroke"><title>${esc(`${name} swing: ${G.describeShot({ ...picked.a, timing: tm }, r)}`)}</title></path>`;
+          }
+        }
+        if (picked && !picked.r.holed && !picked.r.penalty) {
+          const from = picked.r.pos, fx = from[0] * TILE + HALF, fy = from[1] * TILE + HALF;
+          const next = new Map();
+          for (const a of G.actionsAt(L, from)) {
+            if (a.club === 'putter' && !a.toCup) continue;
+            const r = G.shot(L, from, a);
+            // Only shots that get closer to the cup (a tree can open every direction; going backwards isn't a plan).
+            if (!r.holed && Math.hypot(r.pos[0] - hole.cup[0], r.pos[1] - hole.cup[1]) >= Math.hypot(from[0] - hole.cup[0], from[1] - hole.cup[1])) continue;
+            const k = `${r.pos[0]},${r.pos[1]}`;
+            if (!next.has(k) || (r.holed && !next.get(k).r.holed)) next.set(k, { a, r });
+          }
+          for (const { a, r } of next.values()) {
+            const nx = r.pos[0] * TILE + HALF, ny = r.pos[1] * TILE + HALF;
+            const col = r.holed ? 'var(--accent)' : r.penalty ? 'var(--harm)' : 'rgba(255,255,255,.7)';
+            s += `<line x1="${fx}" y1="${fy}" x2="${nx}" y2="${ny}" stroke="${col}" stroke-opacity=".55" stroke-dasharray="4 3" pointer-events="none"/>`;
+            s += `<circle cx="${nx}" cy="${ny}" r="3" fill="none" stroke="${col}" stroke-width="1.5" pointer-events="none"><title>${esc(G.describeShot(a, r))}</title></circle>`;
+          }
+          selText = `${G.describeShot(picked.a, picked.r)} Dashed lines: your possible next shots from there (${next.size}).`;
+        } else if (picked) selText = G.describeShot(picked.a, picked.r);
+      }
+    }
+    // A closed day: the best line for this hole, from the tee, on the course as it stood.
+    if (practice && showLine) {
+      const L = G.layoutOf(hole, on);
+      let pos = hole.tee.slice(), pts = [pos];
+      for (const a of G.parLine(L)) { const r = G.shot(L, pos, a); pos = r.holed ? hole.cup.slice() : r.pos; pts.push(pos); if (r.holed) break; }
+      s += `<polyline points="${pts.map(([x, y]) => `${x * TILE + HALF},${y * TILE + HALF}`).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 3" pointer-events="none"/>`;
+      s += pts.map(([x, y]) => `<circle cx="${x * TILE + HALF}" cy="${y * TILE + HALF}" r="3" fill="var(--accent)" pointer-events="none"/>`).join('');
+    }
+    // While shaping: shade tiles where the chosen feature can't go, ring this golfer's own pick on the hole, and draw
+    // the footprint under the cursor on hover.
+    if (mode === 'shape' && !G.FEATURES[shape.kind].side) { // (a backstop is placed by side, not on the map)
+      const others = features().concat(shape.picks.filter((f) => f && f.hole !== h));
+      for (let y = 0; y < G.H; y++) for (let x = 0; x < G.W; x++) {
+        const teeOrCup = (x === hole.tee[0] && y === hole.tee[1]) || (x === hole.cup[0] && y === hole.cup[1]);
+        if (G.FEATURES[shape.kind].free4) { if (!bankTileOk(hole, h, x, y)) s += `<rect x="${x * TILE}" y="${y * TILE}" width="${TILE}" height="${TILE}" fill="rgba(0,0,0,.45)" pointer-events="none"/>`; continue; }
+        if (teeOrCup || G.placementError(course, others, { hole: h, kind: shape.kind, shape: shape.shapes[shape.kind], x, y, dir: shape.dir }, true)) s += `<rect x="${x * TILE}" y="${y * TILE}" width="${TILE}" height="${TILE}" fill="rgba(0,0,0,.45)" pointer-events="none"/>`;
+      }
+    }
+    // A fairway bank being built: the tiles chosen so far.
+    if (mode === 'shape' && G.FEATURES[shape.kind].free4) s += bankDraft.map(([tx, ty]) => `<rect x="${tx * TILE + 1}" y="${ty * TILE + 1}" width="${TILE - 2}" height="${TILE - 2}" fill="rgba(216,210,143,.55)" stroke="#d8d28f" stroke-width="2" pointer-events="none"/>`).join('');
+    if (mode === 'shape' && shape.picks[h]) {
+      const p = shape.picks[h];
+      const tiles = G.footprint(p);
+      s += tiles.map(([tx, ty]) => `<rect x="${tx * TILE + 1}" y="${ty * TILE + 1}" width="${TILE - 2}" height="${TILE - 2}" fill="none" stroke="var(--accent)" stroke-width="2" pointer-events="none"/>`).join('');
+    }
+    s += '<g id="hover"></g></svg>';
+    $('svg').outerHTML = s.replace('<svg ', '<svg id="svg" ');
+    if ($('sel')) {
+      $('sel').innerHTML = sel && selText ? `<div class="muted" style="margin-top:6px;color:var(--accent)">Selected: ${esc(selText)}</div><div class="row" style="margin-top:6px"><button id="hit" class="on">Hit it</button><button id="unsel">Cancel</button></div>` : '';
+      if ($('hit')) $('hit').onclick = () => playSel();
+      if ($('unsel')) $('unsel').onclick = () => { sel = null; render(); };
+    }
+    for (const c of document.querySelectorAll('.aim')) c.onclick = () => {
+      const k = c.dataset.tocup ? 'cup' : `d${c.dataset.dir}`;
+      if (meter) { stopMeter(); return; }
+      if (sel === k) playSel();
+      else { sel = k; render(); }
+    };
+    for (const r of document.querySelectorAll('.feature')) r.onclick = () => { if (scouting) doScout(r.dataset.id); };
+    if (mode === 'shape') wireShape(hole, h);
+  }
+
+  // ---------- playing ----------
+  // Playing the selected shot. Putts go straight away; every other shot runs the swing meter first: a marker sweeps
+  // the bar, and stopping it (Swing!, Space, or clicking the shot again) sets the timing. The middle lands as
+  // previewed; amber goes 1 tile off line, red 2 (early to the left, late to the right).
+  let meter = null; // { dir, start, period, raf }
+  const PERIOD = { driver: 1000, wood: 1100, long: 1250, short: 1400, wedge: 1600 }; // ms for one sweep and back
+  const timingAt = (m, now) => { const ph = (((now - m.start) % m.period) + m.period) % m.period / m.period; return ph < 0.5 ? -1 + 4 * ph : 3 - 4 * ph; };
+  function playSel() {
+    const k = sel;
+    if (k === 'cup' || club === 'putter') { sel = null; if (k === 'cup') shoot(null, true); else if (k) shoot(Number(k.slice(1))); return; }
+    if (k) startMeter(Number(k.slice(1)));
+  }
+  function startMeter(dir, short) {
+    if (meter) return;
+    meter = { dir, short, start: performance.now(), period: short ? 1600 : PERIOD[club] || 1200, raf: 0 };
+    $('sel').innerHTML = `<div class="muted" style="margin-top:6px;color:var(--accent)">${short ? `Stroke! Stop the marker in the green: amber is one step ${sSel.club === 'putter' ? 'of pace' : 'of carry'} off, red two (early is softer, late is firmer).` : 'Swing! Stop the marker in the green: amber goes 1 tile off line, red 2 (early pulls left, late pushes right).'}</div>
+      <div class="meter"><span class="lbl" style="left:4px">early</span><span class="lbl" style="right:4px">late</span><div class="tick" id="tick"></div></div>
+      <div class="row" style="margin-top:6px"><button id="swingnow" class="on">${short ? 'Stroke!' : 'Swing!'} (Space)</button></div>`;
+    $('swingnow').onclick = stopMeter;
+    const step = (now) => { if (!meter) return; $('tick').style.left = `${(timingAt(meter, now) + 1) * 50}%`; meter.raf = requestAnimationFrame(step); };
+    meter.raf = requestAnimationFrame(step);
+  }
+  function stopMeter() {
+    if (!meter) return;
+    const m = meter;
+    cancelAnimationFrame(m.raf);
+    meter = null;
+    const timing = Math.round(timingAt(m, performance.now()) * 100) / 100;
+    if (m.short) return playShort(timing);
+    sel = null;
+    shoot(m.dir, false, timing);
+  }
+  document.addEventListener('keydown', (ev) => { if (meter && (ev.code === 'Space' || ev.key === ' ')) { ev.preventDefault(); stopMeter(); } });
+  function shoot(dir, toCup, timing) {
+    const before = round.hole;
+    try {
+      const a = toCup ? { club: 'putter', toCup: true, dir: 0 } : club === 'putter' ? { club, dir, dist: putt } : { club, dir, swing, ...(shotShape && G.CURVE[club] ? { shape: shotShape } : {}), ...(timing != null ? { timing } : {}) };
+      const res = G.play(round, features(), a);
+      if (res.trace) res.trace.hole0 = before;
+      sel = null;
+      swing = 'full'; shotShape = '';
+      club = ''; // after every shot, offer the natural club for the new lie (any legal club can still be picked)
+      animating = true; animHole = before; draw(); // the map without previews, the ball off the tee
+      animateLong(res, () => { animating = false; afterStroke(before); render(); });
+    } catch (e) { $('err') && ($('err').textContent = e.message); }
+  }
+
+  // ---------- the ball in flight ----------
+  // After a stroke the page replays it before moving on, from the engine's own trace of the shot, so the animation
+  // always ends where the ball really is. Long game: an arc with a shadow on the ground, bent along the way by the
+  // wind; a tree knocks it back; on fairway or green it bounces and rolls; in rough it hops once; in sand (or thick
+  // rough, or under planted trees) it stops dead with a puff; in water it splashes and reappears at its drop; out of
+  // bounds it flies off and comes back to where it was played. Short game: the ball runs along its curving path; a
+  // chip flies first. Click the map to skip.
+  let anim = null; // { raf, finish }
+  const lerp = (a, b, s) => [a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s];
+  const easeOut = (s) => 1 - (1 - s) * (1 - s);
+  // Segments: { ms, at(s) -> { p: [x, y] in tiles, z: height in tiles, o: opacity, puff, splash } }
+  function runAnim(segs, tile, half, done) {
+    window.__lastAnim = segs; // (for tests: the segments, to sample the ball's path without waiting on frames)
+    // A hidden page gets no animation frames: skip straight to the result rather than leave the round waiting.
+    if (document.hidden) return done();
+    const svg = $('svg');
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('pointer-events', 'none');
+    svg.appendChild(g);
+    const total = segs.reduce((s, x) => s + x.ms, 0);
+    const start = performance.now();
+    const px = (q) => q * tile + half;
+    const draw = (st) => {
+      const lift = st.z * tile * 0.75;
+      let h = `<ellipse cx="${px(st.p[0])}" cy="${px(st.p[1])}" rx="${4 + st.z * 0.6}" ry="${2.2 + st.z * 0.3}" fill="#000" opacity="${(0.35 / (1 + st.z * 0.6)) * (st.o ?? 1)}"/>`;
+      if (st.puff) h += `<circle cx="${px(st.puff.p[0])}" cy="${px(st.puff.p[1])}" r="${3 + st.puff.k * 9}" fill="#efe1b0" opacity="${0.7 * (1 - st.puff.k)}"/>`;
+      if (st.splash) h += `<circle cx="${px(st.splash.p[0])}" cy="${px(st.splash.p[1])}" r="${3 + st.splash.k * 12}" fill="none" stroke="#cfe6ff" stroke-width="2" opacity="${1 - st.splash.k}"/><circle cx="${px(st.splash.p[0])}" cy="${px(st.splash.p[1])}" r="${2 + st.splash.k * 6}" fill="none" stroke="#cfe6ff" stroke-width="1.5" opacity="${1 - st.splash.k}"/>`;
+      h += `<circle cx="${px(st.p[0])}" cy="${px(st.p[1]) - lift}" r="${4.5 + st.z * 0.5}" fill="#fff" stroke="#111" opacity="${st.o ?? 1}"/>`;
+      g.innerHTML = h;
+    };
+    const finish = () => { if (!anim) return; cancelAnimationFrame(anim.raf); anim = null; svg.removeEventListener('click', skip, true); document.removeEventListener('visibilitychange', onHide); done(); };
+    const onHide = () => { if (document.hidden) finish(); };
+    document.addEventListener('visibilitychange', onHide);
+    const skip = (ev) => { ev.stopPropagation(); ev.preventDefault(); finish(); };
+    svg.addEventListener('click', skip, true);
+    const step = (now) => {
+      let el = now - start;
+      if (el >= total) return finish();
+      for (const sg of segs) { if (el <= sg.ms) { draw(sg.at(sg.ms ? el / sg.ms : 1)); break; } el -= sg.ms; }
+      anim.raf = requestAnimationFrame(step);
+    };
+    anim = { raf: requestAnimationFrame(step), finish };
+  }
+  function animateLong(res, done) {
+    const tr = res.trace;
+    if (!tr || !tr.target) return done();
+    const hole = course.holes[tr.hole0];
+    const L = G.layoutOf(hole, G.featuresOn(features(), tr.hole0));
+    const F = tr.from, Tg = tr.target, Dr = tr.drift || [0, 0], E0 = [Tg[0] - Dr[0], Tg[1] - Dr[1]];
+    const full = Math.hypot(Tg[0] - F[0], Tg[1] - F[1]) || 1;
+    const H = Math.max(0.8, Math.min(4, (tr.carry || full) * 0.28)) * (tr.club === 'wedge' ? 1.4 : 1);
+    // The flight's ground track: the straight line to where it would land with no wind, bent progressively by the wind
+    // (its push grows with the square of the way travelled), so the ball curves rather than jumping at the end.
+    const ground = (s) => { const b = lerp(F, E0, s); return [b[0] + Dr[0] * s * s, b[1] + Dr[1] * s * s]; };
+    const land = tr.land || Tg;
+    // Where the flight ends: at the tree it hits, at its landing, or short of it under planted trees.
+    const sEnd = tr.tree ? Math.min(1, Math.hypot(tr.tree[0] - F[0], tr.tree[1] - F[1]) / full)
+      : Math.min(1, Math.hypot(land[0] - F[0], land[1] - F[1]) / full);
+    const flightMs = Math.min(1300, 280 + 70 * full) * Math.max(0.35, sEnd);
+    const zAt = (u) => 4 * H * u * (1 - u);
+    const segs = [{ ms: flightMs, at: (s) => { const u = s * sEnd; return { p: ground(u), z: zAt(u) }; } }];
+    const contact = ground(sEnd), zContact = tr.tree ? zAt(sEnd) : 0;
+    // Water or out of bounds: the ball is picked up there, so these keep a break.
+    if (res.events.includes('out')) {
+      segs.push({ ms: 250, at: (s) => ({ p: contact, z: 0, o: 1 - s }) });
+      segs.push({ ms: 250, at: (s) => ({ p: F, z: 0, o: s }) });
+      return runAnim(segs, TILE, HALF, done);
+    }
+    if (tr.wet) {
+      segs.push({ ms: 450, at: (s) => ({ p: tr.wet, z: 0, o: 1 - Math.min(1, s * 2), splash: { p: tr.wet, k: s } }) });
+      segs.push({ ms: 300, at: (s) => ({ p: res.pos, z: 0, o: s }) });
+      return runAnim(segs, TILE, HALF, done);
+    }
+    // After the flight, one continuous run along the ground: from the flight's end (knocked back off a tree, if it hit
+    // one) through every tile it rolled across, to where it rests (a backstop, bank or ramp's spot included). The ball
+    // carries its flight speed into it and slows smoothly to a stop; bounces travel forward along it.
+    const end = res.holed ? L.cup : res.pos;
+    const pts = [contact];
+    if (tr.tree) pts.push(land);
+    for (const q of tr.roll || []) pts.push(q);
+    if (Math.hypot(end[0] - pts[pts.length - 1][0], end[1] - pts[pts.length - 1][1]) > 0.01) pts.push(end);
+    const cum = [0];
+    for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]));
+    const len = cum[cum.length - 1];
+    const along = (d) => { let k = 1; while (k < cum.length - 1 && cum[k] < d) k++; const f = (d - cum[k - 1]) / ((cum[k] - cum[k - 1]) || 1); return lerp(pts[k - 1], pts[k], Math.max(0, Math.min(1, f))); };
+    const lt = L.grid[Math.round(land[1])] && L.grid[Math.round(land[1])][Math.round(land[0])];
+    const dead = !tr.tree && (lt === 'S' || lt === 'K' || lt === 'P'); // sand, thick rough, under trees: stops dead
+    if (len > 0.05) {
+      // Match the ground speed at landing: an ease-out over the run starts at speed 2·len/ms.
+      const vLand = (full * sEnd) / flightMs; // tiles per ms along the ground at the end of the flight
+      const ms = Math.max(260, Math.min(2600, (2 * len) / Math.max(vLand, 0.004)));
+      const hop1 = tr.tree ? Math.max(0.6, zContact * 0.3) : lt === 'R' || lt === 'M' ? 0.3 : 0.65;
+      segs.push({ ms, at: (s) => {
+        const d = easeOut(s) * len, f = d / len;
+        // Two forward bounces over the first part of the run (one after a tree knock), then rolling.
+        let z = 0;
+        if (tr.tree) z = f < 0.6 ? (zContact * (1 - f / 0.6)) + hop1 * Math.sin(Math.PI * f / 0.6) * 0.5 : 0;
+        else if (f < 0.35) z = hop1 * Math.sin(Math.PI * f / 0.35);
+        else if (f < 0.55) z = hop1 * 0.4 * Math.sin(Math.PI * (f - 0.35) / 0.2);
+        return { p: along(d), z };
+      } });
+    } else if (dead) {
+      segs.push({ ms: 240, at: (s) => ({ p: contact, z: 0, puff: lt === 'S' ? { p: contact, k: s } : null }) });
+    } else {
+      // Stops where it lands (light rough): one small hop in place.
+      segs.push({ ms: 200, at: (s) => ({ p: contact, z: (tr.tree ? zContact * (1 - s) : 0) + 0.3 * Math.sin(Math.PI * s) }) });
+    }
+    if (res.holed) segs.push({ ms: 250, at: (s) => ({ p: end, z: 0, o: 1 - s }) });
+    runAnim(segs, TILE, HALF, done);
+  }
+  function animateShort(path, res, done) {
+    if (!path || path.length < 2) return done();
+    const segs = [];
+    let pts = path.map((q) => q.slice());
+    if (res.chip) { // the flight to where the chip lands, then the roll
+      const a = pts[0], b = pts[1], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      segs.push({ ms: 200 + 40 * d, at: (s) => ({ p: lerp(a, b, s), z: 4 * Math.max(1, d * 0.25) * s * (1 - s) }) });
+      pts = pts.slice(1);
+    }
+    if (pts.length > 1) {
+      const cum = [0];
+      for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+      const len = cum[cum.length - 1] || 1, ms = Math.min(2200, 300 + 85 * len);
+      segs.push({ ms, at: (s) => {
+        const target = easeOut(s) * len; let i = 1; while (i < cum.length - 1 && cum[i] < target) i++;
+        const k = (target - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1);
+        return { p: lerp(pts[i - 1], pts[i], Math.max(0, Math.min(1, k))), z: 0 };
+      } });
+    }
+    const last = pts[pts.length - 1];
+    if (res.water) { segs.push({ ms: 400, at: (s) => ({ p: last, z: 0, o: 1 - s, splash: { p: last, k: s } }) }); segs.push({ ms: 250, at: (s) => ({ p: res.pos, z: 0, o: s }) }); }
+    else if (res.holed) segs.push({ ms: 250, at: (s) => ({ p: [G.SC, G.SC], z: 0, o: 1 - s }) });
+    runAnim(segs, STILE, SH, done);
+  }
+
+  function afterStroke(before) {
+    if (practice) {
+      if (round.done) { round.pars = course.holes.map((hh, i) => G.parOf(G.layoutOf(hh, G.featuresOn(features(), i)))); mode = 'practice'; }
+    } else {
+      if (round.done) finishRound();
+      // Holed out: design that hole for the next golfer before playing on.
+      if (round.done || round.hole !== before) { mode = 'shape'; shape.hole = before; shape.kind = 'bunker'; shape.dir = 0; }
+    }
+  }
+
+  // ---------- the short game ----------
+  // The green and its surrounds at three times the detail. Lighter ground is higher, arrows point downhill, brown
+  // marks are debris. Hover anywhere to see the ball's whole path; click to select, click again (or Hit it) to play.
+  // The putter (green and fringe) aims at the point you choose, at the pace that would roll there on flat ground; the
+  // cup itself putts straight at it. The wedge (off the green) chips to the carry you choose, then the ball rolls.
+  const STILE = 12, SH = STILE / 2;
+  let sClub = '', sSel = null;
+  // The short map as this hole plays with its features (a ramp on the green tilts it).
+  const curShort = (h = round.hole) => G.shortOf(course.holes[h], G.featuresOn(features(), h));
+  function sLie() { return curShort().grid[round.sball[1]][round.sball[0]]; }
+  function sActionAt(tx, ty) {
+    const b = round.sball, dx = tx - b[0], dy = ty - b[1], d = Math.hypot(dx, dy);
+    if (!d) return null;
+    const dir = ((Math.round(Math.atan2(-dy, dx) / ((2 * Math.PI) / G.SDIR)) % G.SDIR) + G.SDIR) % G.SDIR;
+    if (sClub === 'putter') {
+      if (tx === G.SC && ty === G.SC) return { club: 'putter', dir: 'cup', pace: Math.max(1, Math.min(G.PUTT_MAX, Math.ceil(d))), target: [tx, ty] };
+      return { club: 'putter', dir, pace: Math.max(1, Math.min(G.PUTT_MAX, Math.round(d))), target: [tx, ty] };
+    }
+    const carry = G.CHIP_CARRIES.reduce((a, c) => (Math.abs(c - d) < Math.abs(a - d) ? c : a), G.CHIP_CARRIES[0]);
+    return { club: 'wedge', dir, carry, target: [tx, ty], ...(sSpin ? { spin: sSpin } : {}) };
+  }
+  const sSame = (a, b) => a && b && a.club === b.club && a.dir === b.dir && a.pace === b.pace && a.carry === b.carry && a.spin === b.spin;
+  function sPathSvg(a, strong) {
+    const S = curShort(), r = G.shortShot(S, round.sball, a, true);
+    const pts = (r.path || []).map(([x, y]) => `${x * STILE + SH},${y * STILE + SH}`).join(' ');
+    const col = r.holed ? 'var(--accent)' : r.penalty ? 'var(--harm)' : '#fff';
+    const end = r.holed ? [G.SC, G.SC] : r.pos;
+    // The aim: a straight arrow from the ball to the spot chosen. It's the intention, not the result; the curve
+    // below is where the ball actually goes, ending in a ring where it comes to rest.
+    const b = round.sball, tg = a.target || end, bx = b[0] * STILE + SH, by = b[1] * STILE + SH, gx = tg[0] * STILE + SH, gy = tg[1] * STILE + SH;
+    const aim = `<line x1="${bx}" y1="${by}" x2="${gx}" y2="${gy}" stroke="var(--accent)" stroke-width="${strong ? 1.8 : 1.3}" stroke-opacity="${strong ? 0.95 : 0.75}" marker-end="url(#aimhead)" pointer-events="none"><title>Your aim: the spot you're playing for, not necessarily where it ends up</title></line>`;
+    return { svg: aim + `<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="${strong ? 2.5 : 1.5}" stroke-opacity="${strong ? 1 : 0.7}" ${strong ? '' : 'stroke-dasharray="4 3"'} pointer-events="none"/>
+      <circle cx="${end[0] * STILE + SH}" cy="${end[1] * STILE + SH}" r="${strong ? 5 : 4}" fill="none" stroke="${col}" stroke-width="2" pointer-events="none"/>`, r };
+  }
+  function drawShort() {
+    const hole = course.holes[animating ? animHole : round.hole], S = curShort(animating ? animHole : round.hole), N = G.SN;
+    let lo = Infinity, hi = -Infinity;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if ('GF'.includes(S.grid[y][x])) { lo = Math.min(lo, S.h[y][x]); hi = Math.max(hi, S.h[y][x]); }
+    const span = hi - lo || 1;
+    let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${N * STILE}" height="${N * STILE}" viewBox="0 0 ${N * STILE} ${N * STILE}">`;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const t = S.grid[y][x], base = t === 'D' ? 'G' : t;
+      s += `<rect x="${x * STILE}" y="${y * STILE}" width="${STILE}" height="${STILE}" fill="${base === 'O' ? '#0c140e' : COLOR[base] || 'var(--rough)'}"/>`;
+      if ('GFD'.includes(t)) { const k = (S.h[y][x] - lo) / span; s += `<rect x="${x * STILE}" y="${y * STILE}" width="${STILE}" height="${STILE}" fill="${k > 0.5 ? '#fff' : '#000'}" fill-opacity="${(Math.abs(k - 0.5) * 0.45).toFixed(3)}"/>`; }
+      if (t === 'T') s += `<circle cx="${x * STILE + SH}" cy="${y * STILE + SH}" r="5" fill="var(--tree)"/>`;
+      if (t === 'D') s += `<path d="M${x * STILE + 2} ${y * STILE + 9} L${x * STILE + 10} ${y * STILE + 3} M${x * STILE + 3} ${y * STILE + 4} L${x * STILE + 9} ${y * STILE + 10}" stroke="#7a5326" stroke-width="2.5" stroke-linecap="round"><title>Debris: a rolling ball kicks off it and runs on 2 to 3 tiles</title></path>`;
+    }
+    // Downhill arrows on the green and fringe, every third tile.
+    for (let y = 1; y < N - 1; y += 3) for (let x = 1; x < N - 1; x += 3) {
+      if (!'GF'.includes(S.grid[y][x])) continue;
+      const [gx, gy] = G.slopeAt(S, x, y), m = Math.hypot(gx, gy);
+      if (m < 0.004) continue;
+      const len = Math.min(1, m / 0.05) * 9, ux = -gx / m, uy = -gy / m, cx = x * STILE + SH, cy = y * STILE + SH;
+      s += `<path d="M${cx - ux * len / 2} ${cy - uy * len / 2} L${cx + ux * len / 2} ${cy + uy * len / 2}" stroke="rgba(255,255,255,.55)" stroke-width="1.2" marker-end="url(#ah)" pointer-events="none"/>`;
+    }
+    s += `<defs><marker id="ah" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 Z" fill="rgba(255,255,255,.7)"/></marker>
+      <marker id="aimhead" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L12,6 L0,12 L3,6 Z" fill="var(--accent)" stroke="#2a2410" stroke-width="0.8"/></marker></defs>`;
+    // Ramps on the green: their tiles tinted, and an arrow down the fall line on each long tile's worth.
+    for (const [x, y, d] of S.ramps || []) {
+      s += `<rect x="${x * STILE}" y="${y * STILE}" width="${STILE}" height="${STILE}" fill="#7fc8ff" fill-opacity=".22" pointer-events="none"/>`;
+      if ((x - G.SC) % G.SCALE === 0 && (y - G.SC) % G.SCALE === 0) {
+        const [ux, uy] = [[1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1], [1, 1]][d], l = Math.hypot(ux, uy), cx = x * STILE + SH, cy = y * STILE + SH, r = STILE * 1.2;
+        s += `<line x1="${cx - (ux / l) * r}" y1="${cy - (uy / l) * r}" x2="${cx + (ux / l) * r}" y2="${cy + (uy / l) * r}" stroke="#e6f5ff" stroke-width="3" stroke-linecap="round" marker-end="url(#ah)" pointer-events="none"><title>Ramp: putts break this way</title></line>`;
+      }
+    }
+    // The tap-in square: the 8 tiles touching the cup's, where a ball drops without a stroke meter.
+    s += `<rect x="${(G.SC - 1) * STILE}" y="${(G.SC - 1) * STILE}" width="${3 * STILE}" height="${3 * STILE}" fill="none" stroke="#fff" stroke-opacity=".45" stroke-dasharray="3 3" pointer-events="none"><title>Tap-in: a ball resting here drops in one click</title></rect>`;
+    s += `<circle cx="${G.SC * STILE + SH}" cy="${G.SC * STILE + SH}" r="4" fill="#111"/><path d="M${G.SC * STILE + SH} ${G.SC * STILE + SH} V${G.SC * STILE - 12} l10 4 -10 4" fill="var(--harm)" stroke="#fff" stroke-width="1"/>`;
+    if (sSel) {
+      // Orange rings: where the stroke stops if the meter is stopped one step early (softer) or late (firmer).
+      for (const k of [-0.4, 0.4]) {
+        const b = G.shortStruck(sSel, k);
+        if (b === sSel || (b.pace === sSel.pace && b.carry === sSel.carry)) continue;
+        const r = G.shortShot(S, round.sball, b, false), e = r.holed ? [G.SC, G.SC] : r.pos;
+        s += `<circle cx="${e[0] * STILE + SH}" cy="${e[1] * STILE + SH}" r="4" fill="none" stroke="#e89a3c" stroke-width="1.6" stroke-dasharray="2 2"><title>${esc(`${k < 0 ? 'Early (softer)' : 'Late (firmer)'}: ${G.describeShort(b, r)}`)}</title></circle>`;
+      }
+      s += sPathSvg(sSel, true).svg;
+    }
+    s += `<g id="shover"></g>${animating ? '' : `<circle cx="${round.sball[0] * STILE + SH}" cy="${round.sball[1] * STILE + SH}" r="4.5" fill="#fff" stroke="#111"/>`}</svg>`;
+    $('svg').outerHTML = s.replace('<svg ', '<svg id="svg" ');
+    const svg = $('svg');
+    const at = (ev) => { const r = svg.getBoundingClientRect(), k = r.width / (N * STILE); return [Math.floor((ev.clientX - r.left) / k / STILE), Math.floor((ev.clientY - r.top) / k / STILE)]; };
+    svg.onmousemove = (ev) => { if (animating) return; const a = sActionAt(...at(ev)); $('shover').innerHTML = a && !sSame(a, sSel) ? sPathSvg(a, false).svg : ''; };
+    svg.onmouseleave = () => { $('shover').innerHTML = ''; };
+    // A ball touching the cup's tile is a tap-in: no aiming and no meter, one click (or Hit it) holes it.
+    const tapIn = !animating && G.isTapIn(S, round.sball);
+    if (tapIn) {
+      svg.onmousemove = null;
+      svg.onclick = () => { if (!animating) { sSel = { club: 'putter', dir: 'cup', pace: 1 }; playShort(0); } };
+      if ($('sel')) {
+        $('sel').innerHTML = `<div class="muted" style="margin-top:6px;color:var(--accent)">Tap-in: the ball is beside the cup, so it drops without a stroke meter. It still counts as a stroke.</div>
+          <div class="row" style="margin-top:6px"><button id="hit" class="on">Tap it in</button></div>`;
+        $('hit').onclick = svg.onclick;
+      }
+      return;
+    }
+    svg.onclick = (ev) => { if (animating) return; if (meter) return stopMeter(); const a = sActionAt(...at(ev)); if (!a) return; if (sSame(a, sSel)) startMeter(null, true); else { sSel = a; render(); } };
+    if ($('sel')) {
+      const rr = sSel ? sPathSvg(sSel, true).r : null;
+      const tune = sSel ? (sSel.club === 'putter' ? `<button id="softer" ${sSel.pace <= 1 ? 'disabled' : ''}>Softer</button><span class="muted">pace ${sSel.pace}</span><button id="firmer" ${sSel.pace >= G.PUTT_MAX ? 'disabled' : ''}>Firmer</button>` : `<button id="softer" ${sSel.carry <= G.CHIP_CARRIES[0] ? 'disabled' : ''}>Shorter</button><span class="muted">carry ${sSel.carry}</span><button id="firmer" ${sSel.carry >= G.CHIP_CARRIES[G.CHIP_CARRIES.length - 1] ? 'disabled' : ''}>Longer</button>`) : '';
+      $('sel').innerHTML = sSel ? `<div class="muted" style="margin-top:6px;color:var(--accent)">Selected: ${esc(G.describeShort(sSel, rr))}</div>
+        <div class="muted" style="margin-top:4px;color:${rr.holed ? 'var(--accent)' : 'var(--text)'}">${esc(G.explainShort(sSel, rr))}</div>
+        <div class="row" style="margin-top:6px">${tune}</div>
+        <div class="row" style="margin-top:6px"><button id="hit" class="on">Hit it</button><button id="unsel">Cancel</button></div>` : '';
+      const bump = (k) => { if (sSel.club === 'putter') sSel = { ...sSel, pace: Math.max(1, Math.min(G.PUTT_MAX, sSel.pace + k)) }; else { const i = G.CHIP_CARRIES.indexOf(sSel.carry); sSel = { ...sSel, carry: G.CHIP_CARRIES[Math.max(0, Math.min(G.CHIP_CARRIES.length - 1, i + k))] }; } render(); };
+      if ($('softer')) $('softer').onclick = () => bump(-1);
+      if ($('firmer')) $('firmer').onclick = () => bump(1);
+      if ($('hit')) $('hit').onclick = () => startMeter(null, true);
+      if ($('unsel')) $('unsel').onclick = () => { sSel = null; render(); };
+    }
+  }
+  function playShort(timing) {
+    const before = round.hole;
+    try {
+      const S = curShort(), from = round.sball.slice(), a = { ...sSel, timing };
+      const pre = G.shortShot(S, from, G.shortStruck(sSel, timing), true); // the stroke as struck, with its path, for the animation
+      const res = G.play(round, features(), a);
+      sSel = null; sClub = '';
+      animating = true; animHole = before; drawShort(); // the green without the selection or the ball: the animation draws it
+      animateShort(pre.path, { chip: a.club === 'wedge', holed: res.holed, water: res.events.includes('water'), pos: res.pos }, () => { animating = false; afterStroke(before); render(); });
+    } catch (e) { $('err') && ($('err').textContent = e.message); }
+  }
+  function renderShortPanels(total) {
+    const h = round.hole, hole = course.holes[h], lie = sLie();
+    const parNow = G.parOf(G.layoutOf(hole, G.featuresOn(features(), h)));
+    const legal = { putter: G.PUTT_LIES.includes(lie), wedge: lie !== 'G' };
+    if (!legal[sClub]) sClub = legal.putter ? 'putter' : 'wedge';
+    const lieName = { G: 'on the green', F: 'on the fringe', R: 'in the rough', S: 'in a bunker' }[lie] || '';
+    $('status').innerHTML = `<h2>${esc(course.name)}${practice ? ' · closed day: practice' : ''}</h2><div class="row"><span class="big">Hole ${h + 1} · short game</span><span class="muted">par ${parNow} · ball ${lieName}</span></div>
+      <div class="muted">This hole: ${round.strokes[h]} strokes · round: ${total} · golfer ${esc(round.golfer)}</div>`;
+    $('controls').innerHTML = `<h2>Short game</h2><div class="row">
+        <button class="${sClub === 'putter' ? 'on' : ''}" data-sclub="putter" ${legal.putter ? '' : 'disabled title="Putt from the green or fringe"'}>Putter</button>
+        <button class="${sClub === 'wedge' ? 'on' : ''}" data-sclub="wedge" ${legal.wedge ? '' : 'disabled title="On the green, putt"'}>Wedge (chip)</button></div>
+      ${sClub === 'wedge' ? `<div class="row" style="margin-top:6px"><span class="muted">Spin</span>${[['', 'None (rolls ~2)'], ['back', 'Backspin (checks, back ~1)'], ['top', 'Topspin (runs ~4)']].map(([k, l]) => `<button class="${k === sSpin ? 'on' : ''}" data-spin="${k}">${l}</button>`).join('')}</div>` : ''}
+      <div class="muted" style="margin-top:6px">${sClub === 'putter' ? `Hover to aim: the gold arrow points at the spot you're playing for, and the white line shows where the ball really goes (the ring is where it stops). Click to select, click again (or Hit it) to start the stroke meter: stop it in the green to putt at the pace selected; early is softer, late firmer (orange rings show where). The putt rolls as far as it would to that point on flat green, so slopes bend it and speed it up or slow it down. Click the cup to putt straight at it. It drops only if it reaches the cup slowly; faster, it lips out.` : `Hover to aim the chip: the gold arrow points at the spot you're playing for (a carry of ${G.CHIP_CARRIES.join(', ')}), and the white line shows where it lands and rolls. The stroke meter sets the carry: early flies one size shorter, late one longer (orange rings).`}</div>
+      <div class="muted" style="margin-top:6px">Blue patches are ramps golfers left on the green: putts break the way their arrows point. Lighter ground is higher; arrows point downhill; brown marks are debris (twigs, stones, divots): a rolling ball kicks off them like a bumper and runs on 2 to 3 tiles, so you can even bank one into the cup. Par counts two putts from the green, a chip and two putts from off it.</div>
+      <div id="sel"></div><div class="err" id="err"></div>`;
+    for (const b of document.querySelectorAll('[data-sclub]')) b.onclick = () => { sClub = b.dataset.sclub; sSel = null; render(); };
+    for (const b of document.querySelectorAll('[data-spin]')) b.onclick = () => {
+      sSpin = b.dataset.spin;
+      // A chip already selected keeps its line and carry and takes the new spin.
+      if (sSel && sSel.club === 'wedge') { const { spin, ...rest } = sSel; sSel = sSpin ? { ...rest, spin: sSpin } : rest; }
+      render();
+    };
+  }
+  // Done designing the hole just played: on to the next tee, or, after the last, save the round.
+  function nextAfterShape() {
+    if (round.done && shape.hole >= 2) { commitRound(shape.picks.filter(Boolean)); return; }
+    mode = 'play'; club = ''; sel = null; swing = 'full';
+    render();
+  }
+  function doScout(id) {
+    try { G.scout(round, features(), id); scouting = false; render(); } catch (e) { $('err').textContent = e.message; }
+  }
+  function finishRound() {
+    // What this round did for the features it met (credit to their authors), then age the chain.
+    round.credit = G.credit(course, features(), round);
+    round.pars = course.holes.map((h, i) => G.parOf(G.layoutOf(h, G.featuresOn(features(), i))));
+    for (const c of round.credit) {
+      const f = chain.features.find((x) => x.id === c.feature);
+      if (f) { f.harm = (f.harm || 0) + c.harm + c.scouted; f.aid = (f.aid || 0) + c.aid; }
+    }
+  }
+
+  // ---------- shaping the course ----------
+  // This golfer's pick on a hole is being replaced, so it isn't in the way of its replacement.
+  const othersFor = (h) => chain.features.concat(shape.picks.filter((p) => p && p.hole !== h));
+  function place(f) {
+    $('err').textContent = 'Checking the hole can still be finished…';
+    setTimeout(() => {
+      const err = G.placementError(course, othersFor(f.hole), f);
+      if (err) { $('err').textContent = err; return; }
+      shape.picks[f.hole] = f; // stay on this hole: the designer moves on when they choose
+      render();
+    }, 20);
+  }
+  function wireShape(hole, h) {
+    const svg = $('svg');
+    const g = svg.querySelector('#hover');
+    const at = (ev) => { const r = svg.getBoundingClientRect(); return [Math.floor((ev.clientX - r.left) / TILE) + viewX0, Math.floor((ev.clientY - r.top) / TILE) + viewY0]; };
+    // The tee and the cup are never a target: no hover, and clicks there do nothing.
+    const isTeeOrCup = (x, y) => (x === hole.tee[0] && y === hole.tee[1]) || (x === hole.cup[0] && y === hole.cup[1]);
+    svg.onmousemove = (ev) => {
+      const [x, y] = at(ev);
+      if (G.FEATURES[shape.kind].free4) {
+        const ok = bankTileOk(hole, h, x, y) || bankDraft.some((q) => q[0] === x && q[1] === y);
+        svg.style.cursor = ok ? 'pointer' : 'not-allowed';
+        g.innerHTML = ok ? `<rect x="${x * TILE}" y="${y * TILE}" width="${TILE}" height="${TILE}" fill="rgba(242,211,107,.35)" stroke="var(--accent)" pointer-events="none"/>` : '';
+        return;
+      }
+      const f = { id: 'preview', hole: h, kind: shape.kind, shape: shape.shapes[shape.kind], x, y, dir: shape.dir };
+      if (G.FEATURES[shape.kind].side || isTeeOrCup(x, y) || G.placementError(course, othersFor(h), f, true)) { g.innerHTML = ''; svg.style.cursor = 'not-allowed'; return; }
+      svg.style.cursor = 'pointer';
+      g.innerHTML = G.footprint(f).map(([tx, ty]) => `<rect x="${tx * TILE}" y="${ty * TILE}" width="${TILE}" height="${TILE}" fill="rgba(242,211,107,.35)" stroke="var(--accent)" pointer-events="none"/>`).join('')
+        + (shape.kind === 'hill' ? G.hiddenBy(f).map(([tx, ty]) => `<rect x="${tx * TILE}" y="${ty * TILE}" width="${TILE}" height="${TILE}" fill="rgba(0,0,0,.35)" pointer-events="none"/>`).join('') : '');
+    };
+    svg.onmouseleave = () => { g.innerHTML = ''; };
+    svg.onclick = (ev) => {
+      const [x, y] = at(ev);
+      if (G.FEATURES[shape.kind].side) { $('err').textContent = 'Pick the side of the green with the buttons above.'; return; }
+      if (G.FEATURES[shape.kind].free4) {
+        // Click tiles one at a time (each touching the last ones); click a chosen tile again to drop it.
+        const i = bankDraft.findIndex((q) => q[0] === x && q[1] === y);
+        if (i >= 0) { bankDraft.splice(i, 1); render(); return; }
+        if (!bankTileOk(hole, h, x, y)) { $('err').textContent = bankDraft.length ? `Pick ${terrainWord()} touching the tiles you have.` : `Pick a tile of ${terrainWord()}.`; return; }
+        bankDraft.push([x, y]);
+        if (bankDraft.length === 4) { const tiles = bankDraft.slice(); bankDraft = []; place({ id: `f${chain.next + h}`, owner: round.golfer, hole: h, kind: shape.kind, tiles, x: tiles[0][0], y: tiles[0][1], dir: 0, age: 0 }); }
+        else render();
+        return;
+      }
+      if (isTeeOrCup(x, y)) return;
+      place({ id: `f${chain.next + h}`, owner: round.golfer, hole: h, kind: shape.kind, ...(G.SHAPES[shape.kind] ? { shape: shape.shapes[shape.kind] } : {}), x, y, dir: shape.dir, age: 0 });
+    };
+  }
+  // A feature built tile by tile (a fairway bank, trees): 4 connected tiles of the terrain it allows (seed terrain:
+  // light rough for a bank, light or thick rough for trees), outside the short-game area, not on another feature.
+  let bankDraft = [];
+  const terrainWord = () => (G.FEATURES[shape.kind].on === 'RKS' ? 'rough or sand (at least one touching the fairway)' : 'rough (light or thick)');
+  function bankTileOk(hole, h, x, y) {
+    if (x < 0 || y < 0 || x >= G.W || y >= G.H || !G.FEATURES[shape.kind].on.includes(hole.grid[y][x]) || Math.hypot(x - hole.cup[0], y - hole.cup[1]) <= G.ZONE_R) return false;
+    if (bankDraft.some((q) => q[0] === x && q[1] === y) || bankDraft.length >= 4) return false;
+    if (bankDraft.length && !bankDraft.some((q) => Math.max(Math.abs(q[0] - x), Math.abs(q[1] - y)) === 1)) return false;
+    const others = G.withSeed(hole, G.featuresOn(features().concat(shape.picks.filter((f) => f && f.hole !== h)), h));
+    return !others.some((f) => !G.FEATURES[f.kind].area && f.kind !== 'backstop' && G.footprint(f).some((q) => q[0] === x && q[1] === y));
+  }
+  function commitRound(picks) {
+    // The features' prices go on this golfer's card; existing features age; the new ones join the chain.
+    const cost = picks.reduce((s, f) => s + G.costOf(f), 0);
+    for (const f of chain.features) f.age = (f.age || 0) + 1;
+    chain.features = chain.features.filter((f) => f.age < LIFETIME);
+    for (const f of picks) chain.features.push(f);
+    chain.next += 3;
+    const total = round.strokes.reduce((a, b) => a + b, 0) + cost;
+    chain.golfers.push({ name: round.golfer, strokes: round.strokes.slice(), cost, total, par: round.pars.reduce((a, b) => a + b, 0), left: picks.length ? picks.map((f) => `${featName(f)} on hole ${f.hole + 1}`).join(', ') : 'nothing' });
+    saveChain();
+    mode = 'done';
+    render();
+  }
+
+  const featName = (f) => (G.shapeOf(f) ? `${G.FEATURES[f.kind].label} (${G.shapeOf(f).label.toLowerCase()})` : G.FEATURES[f.kind].label);
+
+  // ---------- panels ----------
+  function render() {
+    if (meter) { cancelAnimationFrame(meter.raf); meter = null; }
+    if (!round) {
+      $('status').innerHTML = '<h2>How it works</h2><div class="muted">Pick a course number and a name, then tee off. Each shot: choose a club, then click one of the landing spots it shows (they come from what you can see). After each hole you may leave one feature on it for the next golfer on this browser, paid for with strokes on your own card. Your score is strokes against par on the course you faced.</div>';
+      $('controls').innerHTML = ''; $('log').innerHTML = ''; $('chain').innerHTML = '';
+      $('svg').outerHTML = `<svg id="svg" width="${G.W * TILE}" height="${G.H * TILE}"></svg>`;
+      return;
+    }
+    const total = round.strokes.reduce((a, b) => a + b, 0);
+    if (mode === 'play' && round.phase === 'short') renderShortPanels(total);
+    else if (mode === 'play') {
+      const h = round.hole, hole = course.holes[h];
+      const parNow = G.parOf(G.layoutOf(hole, G.featuresOn(features(), h)));
+      // Clubs the lie allows; if the current pick isn't one, fall back to the natural club for the spot.
+      const Lnow = G.layoutOf(hole, G.featuresOn(features(), h));
+      const legal = Object.keys(G.CLUBS).filter((k) => G.clubAllowed(Lnow, round.ball, k));
+      const far = Math.hypot(round.ball[0] - hole.cup[0], round.ball[1] - hole.cup[1]);
+      // How many of a club's lines (at the current swing) land on the fairway or green, or reach the short game,
+      // with no penalty, on the hole as the golfer sees it. A club with none is flagged.
+      const seenL = G.believedLayout(hole, G.featuresOn(features(), h), new Set(round.known), round.ball);
+      const good = (k) => G.aimDirs(seenL, round.ball).filter((dir) => { const r = G.shot(seenL, round.ball, { club: k, dir, swing }); const tt = seenL.grid[r.pos[1]][r.pos[0]]; return !r.penalty && (tt === 'F' || tt === 'G' || G.inZone(seenL, r.pos)); }).length;
+      if (!legal.includes(club)) {
+        club = legal.includes('putter') ? 'putter' : legal.includes('driver') && hole.par > 3 ? 'driver' : legal.includes('wood') && far > 10 ? 'wood' : far > 6 ? 'long' : far > 3 ? 'short' : 'wedge';
+        // If that club has nowhere good to go, offer the longest one that does.
+        if (club !== 'putter' && !good(club)) { const alt = ['driver', 'wood', 'long', 'short', 'wedge'].find((k) => legal.includes(k) && good(k)); if (alt) club = alt; }
+      }
+      const wind = hole.wind[0] || hole.wind[1] ? `Wind ${G.ARROWS[G.ORIENT.findIndex(([dx, dy]) => dx === hole.wind[0] && dy === hole.wind[1])]} (1 tile)` : 'No wind';
+      $('status').innerHTML = `<h2>${esc(course.name)}${practice ? ' · closed day: practice' : ''}</h2><div class="row"><span class="big">Hole ${h + 1}</span><span class="muted">par ${parNow} on the course you face · ${wind}</span></div>
+        <div class="muted">This hole: ${round.strokes[h]} strokes · round: ${total} · golfer ${esc(round.golfer)}</div>`;
+      const lieNow = Lnow.grid[round.ball[1]][round.ball[0]];
+      const greenHill = lieNow === 'M' && Lnow.greenHills.has(`${round.ball[0]},${round.ball[1]}`);
+      const why = { tee: 'Tee shot only', TF: 'From the tee or fairway only', G: 'On the green only' };
+      const clubs = Object.entries(G.CLUBS).map(([k, c]) => { const n = legal.includes(k) && !c.putt ? good(k) : 1; return `<button class="${k === club ? 'on' : ''}${n ? '' : ' poor'}" data-club="${k}" ${legal.includes(k) ? (n ? '' : 'title="No line lands on the fairway or green from here"') : `disabled title="${why[c.from]}"`}>${esc(c.label)}${c.carry ? ` ${c.carry}+${c.roll}` : ''}${n ? '' : ' ⚠'}</button>`; }).join('');
+      const scoutable = G.withSeed(hole, G.featuresOn(features(), h)).filter((f) => !round.known.includes(f.id) && (G.FEATURES[f.kind].hidden || f.kind === 'hill'));
+      $('controls').innerHTML = `<h2>Shot</h2><div class="row">${clubs}</div>
+        ${club && club !== 'putter' ? `<div class="row" style="margin-top:6px"><span class="muted">Swing</span>${Object.entries(G.SWINGS).map(([k, s]) => `<button class="${k === swing ? 'on' : ''}" data-swing="${k}">${s.label} · ${G.carryOf(club, k)}</button>`).join('')}</div>` : ''}
+        ${G.CURVE[club] ? `<div class="row" style="margin-top:6px"><span class="muted">Shape</span>${[['', 'Straight'], ['draw', `Draw ↰ (${G.CURVE[club]} left, runs on)`], ['fade', `Fade ↱ (${G.CURVE[club]} right, stops sooner)`]].map(([k, l]) => `<button class="${k === shotShape ? 'on' : ''}" data-shape-shot="${k}">${l}</button>`).join('')}</div>` : ''}
+        ${club === 'putter' && !greenHill ? `<div class="muted" style="margin-top:6px;color:var(--accent)">${Math.hypot(round.ball[0] - hole.cup[0], round.ball[1] - hole.cup[1]) <= G.TAP_IN ? 'You\'re inside the dashed ring: click the cup to hole out.' : 'Click the cup to putt straight at it. Putts drop only from inside the dashed ring round the cup, so from out here the ball stops beside it, ready to tap in.'}</div>` : ''}
+        ${club === 'putter' ? `<div class="row" style="margin-top:6px"><span class="muted">Or putt a set length</span>${[1, 2, 3, 4].map((d) => `<button class="${d === putt ? 'on' : ''}" data-putt="${d}">${d}</button>`).join('')}</div>` : ''}
+        ${lieNow === 'P' ? `<div class="muted" style="margin-top:6px;color:var(--accent)">Your ball is under planted trees. Punch out: any direction, ${G.PUNCH} tiles at most, no roll.</div>` : ''}
+        ${greenHill ? '<div class="muted" style="margin-top:6px;color:var(--accent)">You landed on a hill and the line to the hole is unplayable. Find a better spot to putt in from.</div>' : lieNow === 'M' ? '<div class="muted" style="margin-top:6px;color:var(--accent)">You landed on a suspicious hill. It plays as rough.</div>' : ''}
+        ${!scouting && club === 'putter' && G.featuresOn(features(), h).some((f) => f.kind === 'hill' && hole.grid[f.y][f.x] === 'G') ? '<div class="muted" style="margin-top:6px">A hill on this green stops any putt that reaches it, and from on top of it the line to the hole is unplayable.</div>' : ''}
+        <div class="muted" style="margin-top:6px">${scouting ? 'Click a hill or ramp to scout it (1 stroke).' : `Click a landing spot to select it: dashed lines show your possible next shots from there. Click it again (or Hit it), then stop the swing meter in the green; orange crosses show where an early or late swing goes. Gold: holes out. Red: water or out of bounds. You can only aim toward the hole, unless a tree is in your way. Full shots never finish within ${G.PIN_GAP} tiles of the cup. Once the ball stops within ${G.ZONE_R} tiles of the cup, play moves to the short game: the green up close, with its slopes.`}</div>
+        <div id="sel"></div>
+        <div class="row" style="margin-top:6px"><button id="scout" class="${scouting ? 'on' : ''}" ${scoutable.length ? '' : 'disabled'}>Scout a feature (1 stroke)</button></div>
+        <div class="err" id="err"></div>`;
+      for (const b of document.querySelectorAll('[data-club]')) b.onclick = () => { club = b.dataset.club; scouting = false; sel = null; render(); };
+      for (const b of document.querySelectorAll('[data-swing]')) b.onclick = () => { swing = b.dataset.swing; sel = null; render(); };
+      for (const b of document.querySelectorAll('[data-shape-shot]')) b.onclick = () => { shotShape = b.dataset.shapeShot; sel = null; render(); };
+      for (const b of document.querySelectorAll('[data-putt]')) b.onclick = () => { putt = Number(b.dataset.putt); sel = null; render(); };
+      $('scout').onclick = () => { scouting = !scouting; sel = null; render(); };
+    } else if (mode === 'shape' && !round.done) {
+      const hp = G.parOf(G.layoutOf(course.holes[shape.hole], G.featuresOn(features(), shape.hole)));
+      $('status').innerHTML = `<h2>Hole ${shape.hole + 1} done</h2><div class="row"><span class="big">${round.strokes[shape.hole]}</span><span class="muted">strokes · par ${hp} on the hole you faced · round so far ${total}</span></div>`;
+    }
+    if (mode === 'shape') {
+      if (round.done) $('status').innerHTML = `<h2>Round over</h2><div class="row"><span class="big">${total}</span><span class="muted">strokes · par ${round.pars.reduce((a, b) => a + b, 0)} on the course you faced (${round.strokes.map((s, i) => `${s}/${round.pars[i]}`).join(', ')})</span></div>
+        ${round.credit.length ? `<div class="muted" style="margin-top:6px">${round.credit.map((c) => `${esc(c.owner)}'s ${esc(G.FEATURES[c.kind].label.toLowerCase())}: ${c.harm ? `cost you ${c.harm} beyond par` : 'cost you nothing beyond par'}${c.unavoidable ? ` (${c.unavoidable} the best line pays too)` : ''}${c.scouted ? `, ${c.scouted} scouting` : ''}${c.aid ? `, saved you ${c.aid}` : ''}`).join('<br>')}</div>` : ''}`;
+      const pal = Object.entries(G.FEATURES).map(([k, f]) => `<div class="feat ${k === shape.kind ? 'on' : ''}" data-kind="${k}"><b>${esc(f.label)}</b><span><span class="tag ${f.kind}">${f.kind}</span> +${f.cost}</span><small>${esc(f.desc)}</small></div>`).join('');
+      const picked = shape.picks.filter(Boolean);
+      const pickCost = picked.reduce((s, f) => s + G.costOf(f), 0);
+      $('controls').innerHTML = `<h2>Shape hole ${shape.hole + 1} for the next golfer</h2>
+        <div class="row">
+        ${G.FEATURES[shape.kind].oriented ? `<button id="rot">Turn ${G.FEATURES[shape.kind].oriented === 'rot4' ? (G.FEATURES[shape.kind].rotLabels || ['0°', '90°', '180°', '270°'])[shape.dir % 4] : G.ARROWS[shape.dir]}</button>` : ''}
+        ${G.SHAPES[shape.kind] && !G.FEATURES[shape.kind].free4 ? Object.entries(G.SHAPES[shape.kind]).map(([k, w]) => `<button class="${k === shape.shapes[shape.kind] ? 'on' : ''}" data-shape="${k}">${esc(w.label)}${w.cost ? ` +${w.cost}` : ''}</button>`).join('') : ''}
+        ${G.FEATURES[shape.kind].side ? `<span class="muted">Side of the green</span>${[[2, 'N'], [1, 'NE'], [0, 'E'], [7, 'SE'], [6, 'S'], [5, 'SW'], [4, 'W'], [3, 'NW']].map(([s, n]) => `<button data-side="${s}" class="${shape.picks[shape.hole] && shape.picks[shape.hole].kind === 'backstop' && shape.picks[shape.hole].side === s ? 'on' : ''}">${n}</button>`).join('')}` : ''}</div>
+        <div style="display:grid;gap:6px;margin-top:8px">${pal}</div>
+        <div class="muted" style="margin-top:6px">You may leave one feature on the hole you just played, then play on. ${G.FEATURES[shape.kind].free4 ? `Click 4 tiles of ${terrainWord()}, one at a time, each touching the last (side by side or corner to corner), to build the ${shape.kind === 'bank' ? 'bank along the fairway\'s edge' : 'stand of trees'} (${bankDraft.length} of 4 chosen; click one again to drop it).` : G.FEATURES[shape.kind].side ? `Pick the side of hole ${shape.hole + 1}'s green the backstop guards; it sits on the green's outer edge there.` : `Click the map to place it on hole ${shape.hole + 1}; clicking again moves it.`} Shaded tiles are off limits for this feature: no sand or water on the green, no harm within ${G.TEE_BOX} tiles of the tee, nothing on another feature, and the hole must stay finishable. Hills may go anywhere, since golfers can scout them.</div>
+        <div class="muted" style="margin-top:6px">Your picks: ${picked.length ? picked.map((f) => `${esc(featName(f))} on hole ${f.hole + 1}`).join(', ') : 'none'} · +${pickCost} on your card</div>
+        <div class="row" style="margin-top:6px"><button id="done" class="on">${shape.hole < 2 ? `${shape.picks[shape.hole] ? `Keep the ${esc(featName(shape.picks[shape.hole]).toLowerCase())}` : 'Leave nothing'} · on to hole ${shape.hole + 2}` : `Save the round (${picked.length ? `${picked.length} feature${picked.length === 1 ? '' : 's'}, +${pickCost}` : 'no features'})`}</button>${shape.picks[shape.hole] ? `<button id="clear">Clear hole ${shape.hole + 1}</button>` : ''}</div><div class="err" id="err"></div>`;
+      for (const b of document.querySelectorAll('[data-kind]')) b.onclick = () => { bankDraft = []; shape.kind = b.dataset.kind; if (G.SHAPES[shape.kind]) shape.dir %= 4; render(); };
+      for (const b of document.querySelectorAll('[data-shape]')) b.onclick = () => { shape.shapes[shape.kind] = b.dataset.shape; render(); };
+      for (const b of document.querySelectorAll('[data-side]')) b.onclick = () => { const hole = course.holes[shape.hole]; place({ id: `f${chain.next + shape.hole}`, owner: round.golfer, hole: shape.hole, kind: 'backstop', side: Number(b.dataset.side), x: hole.cup[0], y: hole.cup[1], dir: 0, age: 0 }); };
+      if ($('rot')) $('rot').onclick = () => { shape.dir = G.FEATURES[shape.kind].oriented === 'rot4' ? (shape.dir + 1) % 4 : (shape.dir + 1) % 8; render(); };
+      $('done').onclick = nextAfterShape;
+      if ($('clear')) $('clear').onclick = () => { shape.picks[shape.hole] = null; bankDraft = []; render(); };
+    } else if (mode === 'practice') {
+      $('status').innerHTML = `<h2>Practice round over</h2><div class="row"><span class="big">${total}</span><span class="muted">strokes · par ${round.pars.reduce((a, b) => a + b, 0)} (${round.strokes.map((s, i) => `${s}/${round.pars[i]}`).join(', ')})</span></div><div class="muted">Day ${courseNum()} is closed, so nothing was saved to the chain.</div>`;
+      $('controls').innerHTML = '<h2>Next</h2><div class="muted">Play today\'s course (set Course to today\'s number) to join its chain.</div>';
+    } else if (mode === 'done') {
+      const g = chain.golfers[chain.golfers.length - 1];
+      $('status').innerHTML = `<h2>Saved to the chain</h2><div class="muted">${esc(g.name)}: ${g.total} on the card (${g.strokes.join(' + ')}${g.cost ? ` + ${g.cost} for features` : ''}), par ${g.par}. Left: ${esc(g.left)}.</div>`;
+      $('controls').innerHTML = '<h2>Next</h2><div class="muted">Hand over to the next golfer: change the name above and press Tee off. They face the course with your features on it.</div>';
+    }
+    $('log').innerHTML = round.log.map((l) => `<div>H${l.hole + 1}: ${esc(l.text)}</div>`).join('');
+    $('log').scrollTop = 1e6;
+    const fs = chain.features;
+    $('chain').innerHTML = `<h2>The chain on ${esc(courseId)}${practice ? ' · closed' : ''}</h2>
+      ${practice ? `<div class="row" style="margin-bottom:6px"><span class="muted">The day is closed: everything is revealed.</span><button id="bestline" class="${showLine ? 'on' : ''}">${showLine ? 'Hide' : 'Show'} the best line</button></div>` : ''}
+      <table><tr><th>Golfer</th><th>Card</th><th>vs par</th><th>Left</th></tr>${chain.golfers.map((x) => `<tr><td>${esc(x.name)}</td><td>${x.total}</td><td>${x.total - x.par > 0 ? '+' : ''}${x.total - x.par}</td><td class="muted">${esc(x.left)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Nobody yet.</td></tr>'}</table>
+      ${fs.length ? `<div class="muted" style="margin-top:6px">On the course now: ${fs.map((f) => `${esc(f.owner)}'s ${esc(G.FEATURES[f.kind].label.toLowerCase())} (hole ${f.hole + 1}, ${LIFETIME - (f.age || 0)} golfer${LIFETIME - (f.age || 0) === 1 ? '' : 's'} left; earned ${f.harm || 0} harm, ${f.aid || 0} aid)`).join('; ')}</div>` : ''}`;
+    if ($('bestline')) $('bestline').onclick = () => { showLine = !showLine; render(); };
+    draw();
+  }
+  render();
+})();
+</script>
+</body>
+</html>
