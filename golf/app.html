@@ -74,7 +74,10 @@
   /* Meter */
   .meter { position: relative; height: 26px; border-radius: 999px; overflow: hidden; margin-top: 8px;
     background: linear-gradient(90deg, var(--harm) 0 20%, var(--amber) 20% 40%, var(--good) 40% 60%, var(--amber) 60% 80%, var(--harm) 80% 100%); }
-  .meter .tick { position: absolute; top: -2px; bottom: -2px; width: 5px; margin-left: -2px; background: var(--ink); border-radius: 3px; }
+  .meter .rail { position: absolute; inset: 0; will-change: transform; } /* swept by the Web Animations API from runMeter */
+  .meter .tick { position: absolute; left: 0; top: -2px; bottom: -2px; width: 5px; margin-left: -2px; background: var(--ink); border-radius: 3px; }
+  #zoomctl { position: absolute; right: 12px; top: 74px; z-index: 6; display: grid; gap: 8px; }
+  #zoomctl button { width: 44px; height: 44px; border-radius: 50%; border: 0; background: #fff; color: var(--ink); font: 800 24px/1 'Baloo 2', sans-serif; box-shadow: 0 3px 10px rgba(0,0,0,.18); cursor: pointer; }
   #tap { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); width: 150px; height: 150px; border-radius: 50%; background: var(--marigold); font: 800 34px 'Baloo 2'; box-shadow: 0 0 0 18px rgba(242,181,46,.3), 0 10px 30px rgba(0,0,0,.25); z-index: 9; }
   #taphint { position: absolute; left: 0; right: 0; top: calc(40% + 100px); text-align: center; color: #fff; font: 800 15px Nunito; text-shadow: 0 1px 4px rgba(0,0,0,.4); z-index: 9; pointer-events: none; }
   /* Hole done card */
@@ -85,14 +88,16 @@
   .num { font: 800 15px 'Baloo 2'; }
   /* The design phase: a carousel of feature cards */
   .fcards { display: flex; gap: 8px; overflow-x: auto; padding: 10px 2px 10px; margin: 0 -2px; scroll-snap-type: x mandatory; }
-  .fcard { flex: none; width: 104px; scroll-snap-align: start; text-align: left; border: 1.5px solid var(--line); border-radius: 16px; padding: 10px; background: #fff; display: grid; gap: 3px; }
-  .fcard.on { background: var(--ink); color: #fff; border-color: var(--ink); }
-  .fcard b { font: 800 14px/1.15 Nunito; }
+  .fcard { flex: none; width: 86px; scroll-snap-align: start; text-align: center; border: 0; border-radius: 16px; padding: 4px 2px 6px; background: none; display: grid; gap: 2px; justify-items: center; }
+  .fcard.on { background: #F1EDE4; }
+  /* a round felt token: kind-coloured rim, soft felt face, the feature drawn on it */
+  .ftok { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, #8fd06a, #5aa338 70%); box-shadow: inset 0 0 0 5px var(--kc), inset 0 -4px 8px rgba(0,0,0,.18), 0 4px 8px rgba(0,0,0,.14); margin-bottom: 3px; transition: transform .15s; }
+  .ftok svg { width: 36px; height: 36px; }
+  .fcard.on .ftok { transform: translateY(-4px) scale(1.06); box-shadow: inset 0 0 0 5px var(--kc), inset 0 -4px 8px rgba(0,0,0,.18), 0 0 0 3px #fff, 0 0 0 6px var(--kc), 0 8px 14px rgba(0,0,0,.2); }
+  .fcard b { font: 800 12.5px/1.1 Nunito; }
   .fsw { width: 22px; height: 22px; border-radius: 7px; }
   .ftag { font: 800 11px Nunito; text-transform: uppercase; letter-spacing: .05em; }
-  .fcard.on .ftag { filter: brightness(1.4); }
   .fcost { font: 700 12px Nunito; color: var(--muted); }
-  .fcard.on .fcost { color: #cfd6d1; }
   .tag-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: 0; }
   .hidden { display: none !important; }
 </style>
@@ -104,6 +109,7 @@
   <div id="call" class="hidden"></div>
   <div id="explain" class="hidden"></div>
   <div id="caddy" class="hidden"><div class="mascot"></div><div class="bubble" id="caddytext"></div></div>
+  <div id="zoomctl" class="hidden"><button id="zin" title="Zoom in">+</button><button id="zout" title="Zoom out">−</button></div>
   <button id="tap" class="hidden">Tap</button>
   <div id="taphint" class="hidden">Tap when the marker<br>is in the green</div>
   <div id="sheet" class="hidden"><div class="grab"></div><div id="sheetbody"></div></div>

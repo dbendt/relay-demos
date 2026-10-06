@@ -68,7 +68,7 @@
     driver: { label: 'Driver', carry: 13, roll: 2, wind: true, from: 'tee', maxMiss: 2 },
     wood: { label: 'Wood', carry: 11, roll: 2, wind: true, from: 'TF', maxMiss: 2 },
     long: { label: 'Long iron', carry: 8, roll: 1, wind: true, maxMiss: 2 },
-    short: { label: 'Short iron', carry: 6, roll: 1, wind: true, maxMiss: 1 },
+    short: { label: 'Short iron', carry: 5, roll: 1, wind: true, maxMiss: 1 },
     wedge: { label: 'Wedge', carry: 3, roll: 0, wind: false, maxMiss: 1 },
     putter: { label: 'Putter', putt: true, max: 5, from: 'G' },
   };
@@ -622,7 +622,16 @@
             if (r === 'stop') break;
           }
         }
-        // Nobody sticks it to the pin: a full shot that would stop within PIN_GAP of the cup runs on past it.
+        // Nobody sticks it to the pin: a full shot that would stop within PIN_GAP of the cup is kept PIN_GAP away. Short
+        // of the pin it checks up short (back along its line, on tiles it could rest on); past the pin it runs on.
+        if (dist(cur, L.cup) < PIN_GAP && (L.cup[0] - cur[0]) * d[0] + (L.cup[1] - cur[1]) * d[1] > 0) {
+          const end = cur.slice();
+          for (let j = 1; j <= 8; j++) {
+            const p = [Math.round(end[0] - d[0] * j), Math.round(end[1] - d[1] * j)], tt = terrainAt(L, p[0], p[1]);
+            if (tt === 'W' || tt === 'O' || tt === 'T') continue;
+            if (dist(p, L.cup) >= PIN_GAP) { cur = p; if (tr) tr.roll.push(p.slice()); break; }
+          }
+        }
         const start = cur.slice();
         for (let j = 1; j <= 8 && dist(cur, L.cup) < PIN_GAP; j++) {
           const r = roll([Math.round(start[0] + d[0] * j), Math.round(start[1] + d[1] * j)]);
@@ -895,6 +904,7 @@
         const rl = Math.hypot(rvx, rvy) || 1, bs = bounceSpeed(sp);
         vx = (rvx / rl) * bs; vy = (rvy / rl) * bs;
         if (!events.includes('debris')) events.push('debris');
+        (events.debrisAt || (events.debrisAt = [])).push([ntx, nty]); // (which pieces, for drawing; no effect on play)
         continue;
       }
       x = nx; y = ny;
@@ -953,6 +963,7 @@
       if (lt === 'S') r = { pos: restTile(x, y), holed: false };
       else if (lt === 'D') { // lands on debris: it kicks back the way it came, and rolls
         events.push('debris');
+        (events.debrisAt || (events.debrisAt = [])).push([Math.round(x), Math.round(y)]);
         x -= u[0]; y -= u[1];
         const bs = bounceSpeed(1.2);
         r = sRoll(S, x, y, -u[0] * bs, -u[1] * bs, events, path, near);
