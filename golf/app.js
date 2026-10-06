@@ -23,6 +23,40 @@ const yards = (tiles) => Math.round((tiles * YD) / 5) * 5;
 
 // ---------- the hole ----------
 const qs = new URLSearchParams(location.search);
+
+// ---------- crash log (for phones, where a crash leaves no console) ----------
+// Each step of loading and play, any error, a lost WebGL context, and every 2 s the frame rate, worst frame and GPU
+// counts are written to localStorage as they happen, so the steps before a crash survive it. ?debug=1 shows the
+// previous session's log (and this one's, live) in a box that can be copied. ?q=low (remembered) draws less.
+const CRASH = 'relay-golf-crashlog';
+const crashLog = (() => {
+  let prev = [], cur = [];
+  try { prev = JSON.parse(localStorage.getItem(CRASH) || '[]'); localStorage.setItem(CRASH + ':prev', JSON.stringify(prev)); } catch { /* no storage */ }
+  const t0 = performance.now();
+  const note = (msg) => {
+    cur.push(`${((performance.now() - t0) / 1000).toFixed(1)}s ${msg}`); if (cur.length > 80) cur.shift();
+    try { localStorage.setItem(CRASH, JSON.stringify(cur)); } catch { /* full */ }
+    if (box) box.textContent = `PREVIOUS SESSION\n${prev.join('\n') || '(none)'}\n\nTHIS SESSION\n${cur.join('\n')}`;
+  };
+  let box = null;
+  if (qs.get('debug') === '1') {
+    box = document.createElement('pre');
+    box.style.cssText = 'position:fixed;left:4px;right:4px;top:4px;max-height:45vh;overflow:auto;z-index:999;margin:0;padding:6px;background:rgba(0,0,0,.8);color:#9f9;font:10px/1.3 monospace;white-space:pre-wrap;user-select:text;-webkit-user-select:text';
+    document.addEventListener('DOMContentLoaded', () => document.body.appendChild(box)); if (document.body) document.body.appendChild(box);
+  }
+  addEventListener('error', (e) => note(`ERROR ${e.message} @${(e.filename || '').split('/').pop()}:${e.lineno}`));
+  addEventListener('unhandledrejection', (e) => note(`REJECT ${e.reason && (e.reason.message || e.reason)}`));
+  addEventListener('pagehide', () => note('pagehide'));
+  document.addEventListener('visibilitychange', () => note(`visibility ${document.visibilityState}`));
+  note(`boot ${location.search} ${innerWidth}x${innerHeight} dpr ${devicePixelRatio} ${navigator.userAgent.replace(/.*\((.*?)\).*/, '$1')}`);
+  return note;
+})();
+// Quality: ?q=low or ?q=high, remembered on this device (?q=auto forgets it).
+const QUALITY = (() => {
+  let q = qs.get('q');
+  try { if (q === 'auto') { localStorage.removeItem('relay-golf-q'); q = null; } else if (q) localStorage.setItem('relay-golf-q', q); else q = localStorage.getItem('relay-golf-q'); } catch { /* no storage */ }
+  return q === 'low' ? 'low' : q === 'high' ? 'high' : 'auto';
+})();
 const courseNo = Math.max(1, Number(qs.get('course')) || window.RelayChain.today()); // (today's course by default)
 const courseId = `links#${courseNo}`;
 const course = G.getCourse(courseId);
@@ -48,7 +82,7 @@ const courseName = C.courseName(courseId);
 
 // ---------- the board (board.js): the short-game map round the cup, the forest ring, display-only trees ----------
 const B = holeBoard(G, hole, features);
-const { S, SN, SC, SCALE, sToW, wToS, shortRel, DECOR, isDecor, FOREST } = B;
+const { S, SN, SC, SCALE, hCupS, sToW, wToS, shortRel, DECOR, isDecor, FOREST } = B;
 
 // ---------- renderer, scene, the diorama ----------
 // The course is drawn by diorama.js (the look tuned in look.html): the long map's grid becomes the board, with the
@@ -56,7 +90,10 @@ const { S, SN, SC, SCALE, sToW, wToS, shortRel, DECOR, isDecor, FOREST } = B;
 // presets in diorama.js), noon and clear by default. Phones get a lighter build (fewer samples, fewer fur shells).
 const phone = $('phone'), canvas = $('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.setPixelRatio(QUALITY === 'low' ? 1 : Math.min(2, window.devicePixelRatio || 1));
+renderer.info.autoReset = false; // (the crash log counts a whole frame's passes: reset in frame())
+canvas.addEventListener('webglcontextlost', () => crashLog('WEBGL CONTEXT LOST'));
+canvas.addEventListener('webglcontextrestored', () => crashLog('webgl context restored'));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 300);
@@ -64,13 +101,17 @@ const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 300);
 const SKY = courseSky(courseId, { time: qs.get('time'), weather: qs.get('weather') });
 const look = { ...LOOK_DEFAULTS };
 Object.assign(look, TIMES[SKY.time]); WEATHER[SKY.weather](look);
-const lowEnd = window.matchMedia('(pointer: coarse)').matches;
+const lowEnd = QUALITY === 'auto' ? window.matchMedia('(pointer: coarse)').matches : QUALITY === 'low';
 if (lowEnd) Object.assign(look, { shells: Math.min(look.shells, 5), fogSteps: Math.min(look.fogSteps, 6) });
+if (QUALITY === 'low') Object.assign(look, { shells: 0, fogSteps: 4, cards: 0 });
+crashLog(`quality ${QUALITY}${lowEnd ? ' (low-end build)' : ''}, ${SKY.time} ${SKY.weather}`);
 const dio = createDiorama({
-  renderer, scene, settings: look, origin: [-0.5 - FOREST, -0.5 - FOREST], quality: lowEnd ? { sub: 6, px: 24, shadow: 2048, canopy: 2, fuzzShells: 1 } : { sub: 8, px: 32, shadow: 4096, canopy: 3, fuzzShells: 2 },
+  renderer, scene, settings: look, origin: [-0.5 - FOREST, -0.5 - FOREST], quality: QUALITY === 'low' ? { sub: 5, px: 14, shadow: 1024, canopy: 1, fuzzShells: 0 } : lowEnd ? { sub: 6, px: 24, shadow: 2048, canopy: 2, fuzzShells: 1 } : { sub: 8, px: 32, shadow: 4096, canopy: 3, fuzzShells: 2 },
   map: B.map,
 });
+crashLog('building the board');
 dio.build();
+crashLog('board built');
 
 // ---------- the long map (drawn by the diorama); the soft-tile painter the short map still uses ----------
 // Each terrain type has a height (turf raised, sand and water sunk); the heights are blurred so edges round off, and
@@ -925,7 +966,8 @@ const sLie = () => S.grid[round.sball[1]][round.sball[0]];
 const sLegal = () => ({ putter: G.PUTT_LIES.includes(sLie()), wedge: sLie() !== 'G' });
 let sClub = null;
 function startShort() {
-  if (!shortMesh) buildShort();
+  crashLog('short game: start');
+  if (!shortMesh) { buildShort(); crashLog('short game: overlays built'); }
   shortMode = true; shortMesh.visible = heights;
   marks.visible = true;
   sSel = null;
@@ -1421,9 +1463,20 @@ function frame(now) {
   }
   if (fly && state === 'flyover') fly(now);
   updateCamera(now);
+  if (state !== watch.state) { crashLog(`state ${state}`); watch.state = state; }
+  if (watch.last) watch.worst = Math.max(watch.worst, now - watch.last);
+  watch.last = now; watch.n++;
+  if (!watch.t0) { watch.t0 = now; crashLog('first frame'); }
+  else if (now - watch.t0 > 2000) {
+    const i = renderer.info;
+    crashLog(`${Math.round((watch.n * 1000) / (now - watch.t0))} fps, worst ${Math.round(watch.worst)} ms, ${i.render.calls} calls, ${Math.round(i.render.triangles / 1000)}k tris, ${i.memory.geometries} geos, ${i.memory.textures} texs, cam y ${camera.position.y.toFixed(1)}`);
+    watch.t0 = now; watch.n = 0; watch.worst = 0;
+  }
+  renderer.info.reset();
   dio.render(camera, now / 1000);
   requestAnimationFrame(frame);
 }
+const watch = { state: null, t0: 0, n: 0, worst: 0, last: 0 }; // (the crash log's frame watch)
 resize();
 placeBall(TEE[0], TEE[1]);
 requestAnimationFrame(frame);

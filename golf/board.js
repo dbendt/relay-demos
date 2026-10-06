@@ -81,5 +81,5 @@ export function holeBoard(G, hole, features, { forest = 7 } = {}) {
       },
     },
   };
-  return { L, S, SN, SC, SCALE, sToW, wToS, shortRel, DECOR, isDecor, FOREST, map };
+  return { L, S, SN, SC, SCALE, hCupS, sToW, wToS, shortRel, DECOR, isDecor, FOREST, map };
 }
